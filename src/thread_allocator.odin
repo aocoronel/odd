@@ -19,6 +19,9 @@ import "core:sync"
 
 THREAD :: #config(THREAD, false)
 
+// Assume modern computers can't go more than 64 CPUs
+MAX_THREAD_COUNT :: #config(MAX_THREAD_COUNT, 64)
+
 @(thread_local)
 @(private)
 ID: int
