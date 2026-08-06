@@ -12,6 +12,9 @@ import "core:sync"
 // performs a single call per thread group, allocating enough memory for all threads and dispatching
 // the different regions of the same buffer to each thread.
 //
+// This implementation is opt-in, since both single-threadding and multi-threadding support is
+// provided.
+//
 // Inspired by:
 // https://www.dgtlgrove.com/p/multi-core-by-default
 // https://codeberg.org/aocoronel/aoclibs/src/branch/main/src/thread.c
@@ -99,7 +102,7 @@ is_leader :: proc(ctx: ^Thread_Allocator) -> bool {
 	}
 }
 
-thread_init :: proc(
+thread_allocator_init :: proc(
 	ctx: ^Thread_Allocator,
 	thread_count, leader_id: int,
 	allocator: mem.Allocator,
@@ -138,29 +141,36 @@ multi_buffer_thread_allocator_proc :: proc(
 	[]byte,
 	mem.Allocator_Error,
 ) {
-	m := (^Thread_Allocator)(allocator_data)
-	size := size * m.thread_count
-	rng := range(size)
-	result, err := single_buffer_thread_allocator_proc(
-		allocator_data,
-		mode,
-		size,
-		alignment,
-		old_memory,
-		old_size,
-		loc,
-	)
-	#partial switch mode {
-	case .Alloc:
-		fallthrough
-	case .Alloc_Non_Zeroed:
-		fallthrough
-	case .Resize:
-		fallthrough
-	case .Resize_Non_Zeroed:
-		return result[rng.begin:rng.end], err
-	case:
-		return result, err
+	when THREAD {
+		m := (^Thread_Allocator)(allocator_data)
+		size := size * m.thread_count
+		rng := range(size)
+		result, err := single_buffer_thread_allocator_proc(
+			allocator_data,
+			mode,
+			size,
+			alignment,
+			old_memory,
+			old_size,
+			loc,
+		)
+		#partial switch mode {
+		case .Alloc, .Alloc_Non_Zeroed, .Resize, .Resize_Non_Zeroed:
+			return result[rng.begin:rng.end], err
+		case:
+			return result, err
+		}
+	} else {
+		m := (^Thread_Allocator)(allocator_data)
+		return m.backing.procedure(
+			m.backing.data,
+			mode,
+			size,
+			alignment,
+			old_memory,
+			old_size,
+			loc,
+		)
 	}
 }
 
@@ -176,35 +186,67 @@ single_buffer_thread_allocator_proc :: proc(
 	[]byte,
 	mem.Allocator_Error,
 ) {
-	@(static) result: []byte
-	@(static) err: mem.Allocator_Error
-	m := (^Thread_Allocator)(allocator_data)
+	when THREAD {
+		@(static) result: []byte
+		@(static) err: mem.Allocator_Error
+		m := (^Thread_Allocator)(allocator_data)
 
-	id := get_id()
-
-	sync.barrier_wait(&m.barrier)
-
-	if !is_leader(m) {
-		when ODIN_DEBUG {
-			log.debugf(">> [%d] wait", id)
+		if !is_leader(m) {
+			when ODIN_DEBUG {
+				log.debugf("waits")
+			}
+			sync.barrier_wait(&m.barrier)
+			sync.barrier_wait(&m.barrier)
+			ptr := result
+			return ptr, err
 		}
+
+		#partial switch mode {
+		case .Alloc, .Alloc_Non_Zeroed, .Resize, .Resize_Non_Zeroed:
+			when ODIN_DEBUG {
+				log.debugf(">>> allocate %d bytes", size)
+			}
+			ptr, error := m.backing.procedure(
+				m.backing.data,
+				mode,
+				size,
+				alignment,
+				old_memory,
+				old_size,
+				loc,
+			)
+			sync.barrier_wait(&m.barrier)
+			result, err = ptr, error
+			sync.barrier_wait(&m.barrier)
+			return ptr, err
+		case .Free:
+			when ODIN_DEBUG {
+				log.debugf(">>> free")
+			}
+			fallthrough
+		case:
+			ptr, error := m.backing.procedure(
+				m.backing.data,
+				mode,
+				size,
+				alignment,
+				old_memory,
+				old_size,
+				loc,
+			)
+			sync.barrier_wait(&m.barrier)
+			result, err = ptr, error
+			sync.barrier_wait(&m.barrier)
+			return ptr, err
+		}
+		sync.barrier_wait(&m.barrier)
+		result, err = nil, nil
 		sync.barrier_wait(&m.barrier)
 		ptr := result
 		return ptr, err
-	}
-
-	#partial switch mode {
-	case .Alloc:
-		fallthrough
-	case .Alloc_Non_Zeroed:
-		fallthrough
-	case .Resize:
-		fallthrough
-	case .Resize_Non_Zeroed:
-		when ODIN_DEBUG {
-			log.debugf("[ALLOC][%d][%d bytes]", id, size)
-		}
-		result, err = m.backing.procedure(
+	} else {
+		m := (^Thread_Allocator)(allocator_data)
+		return m.backing.procedure(
 			m.backing.data,
 			mode,
 			size,
@@ -213,28 +255,5 @@ single_buffer_thread_allocator_proc :: proc(
 			old_size,
 			loc,
 		)
-		sync.barrier_wait(&m.barrier)
-		ptr := result
-		return ptr, err
-	case:
-		when ODIN_DEBUG {
-			log.debugf("[FREE][%d]", id)
-		}
-		result, err = m.backing.procedure(
-			m.backing.data,
-			mode,
-			size,
-			alignment,
-			old_memory,
-			old_size,
-			loc,
-		)
-		sync.barrier_wait(&m.barrier)
-		ptr := result
-		return ptr, err
 	}
-	result, err = nil, nil
-	sync.barrier_wait(&m.barrier)
-	ptr := result
-	return ptr, err
 }
