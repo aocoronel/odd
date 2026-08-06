@@ -17,8 +17,13 @@ import "core:sync"
 // https://codeberg.org/aocoronel/aoclibs/src/branch/main/src/thread.c
 // https://github.com/aocoronel/multicore
 
+THREAD :: #config(THREAD, false)
+
 @(thread_local)
+@(private)
 ID: int
+
+@(private)
 COUNT: int
 
 Thread_Allocator :: struct {
@@ -33,15 +38,33 @@ Range :: struct {
 }
 
 get_id :: proc() -> int {
-	return ID
+	when THREAD {
+		return ID
+	} else {
+		return 0
+	}
+}
+
 }
 
 get_count :: proc() -> int {
-	return COUNT
+	when THREAD {
+		return COUNT
+	} else {
+		return 1
+	}
+}
+
+set_id :: proc(id: int) {
+	when THREAD {
+		ID = id
+	}
 }
 
 set_count :: proc(count: int) {
-	COUNT = count
+	when THREAD {
+		COUNT = count
+	}
 }
 
 range :: proc(count: int) -> Range {
