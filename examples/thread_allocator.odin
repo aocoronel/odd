@@ -89,5 +89,10 @@ main :: proc() {
 	}
 
 	thread.join_multiple(..threads[:count])
+
+	for i in 0 ..< count {
+		free(threads[i])
+	}
+
 	fmt.println("End program")
 }
