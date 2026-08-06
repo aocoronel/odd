@@ -48,6 +48,10 @@ get_id :: proc() -> int {
 	}
 }
 
+barrier_wait :: proc(barrier: ^sync.Barrier) {
+	when THREAD {
+		sync.barrier_wait(barrier)
+	}
 }
 
 get_count :: proc() -> int {
@@ -71,19 +75,28 @@ set_count :: proc(count: int) {
 }
 
 range :: proc(count: int) -> Range {
-	id := get_id()
-	thread_count := get_count()
-	values_per_thread := count / thread_count
-	leftover_values_count := (count) % (thread_count)
-	thread_has_leftover: bool = (id < leftover_values_count)
-	leftovers_before_this_thread_idx := (thread_has_leftover ? (id) : leftover_values_count)
-	thread_first_value_idx := (values_per_thread * (id) + leftovers_before_this_thread_idx)
-	thread_opl_value_idx := (thread_first_value_idx + values_per_thread + int(thread_has_leftover))
-	return Range{thread_first_value_idx, thread_opl_value_idx}
+	when THREAD {
+		id := get_id()
+		thread_count := get_count()
+		values_per_thread := count / thread_count
+		leftover_values_count := count % thread_count
+		thread_has_leftover: bool = id < leftover_values_count
+		leftovers_before_this_thread_idx := thread_has_leftover ? id : leftover_values_count
+		thread_first_value_idx := values_per_thread * id + leftovers_before_this_thread_idx
+		thread_opl_value_idx :=
+			thread_first_value_idx + values_per_thread + int(thread_has_leftover)
+		return Range{thread_first_value_idx, thread_opl_value_idx}
+	} else {
+		return Range{0, count}
+	}
 }
 
 is_leader :: proc(ctx: ^Thread_Allocator) -> bool {
-	return ctx.leader_id == get_id()
+	when THREAD {
+		return ctx.leader_id == get_id()
+	} else {
+		return true
+	}
 }
 
 thread_init :: proc(
@@ -98,11 +111,19 @@ thread_init :: proc(
 }
 
 multi_buffer_thread_allocator :: proc(ctx: ^Thread_Allocator) -> mem.Allocator {
-	return mem.Allocator{procedure = multi_buffer_thread_allocator_proc, data = ctx}
+	when THREAD {
+		return mem.Allocator{procedure = multi_buffer_thread_allocator_proc, data = ctx}
+	} else {
+		return mem.Allocator{procedure = ctx.backing.procedure, data = ctx.backing.data}
+	}
 }
 
 single_buffer_thread_allocator :: proc(ctx: ^Thread_Allocator) -> mem.Allocator {
-	return mem.Allocator{procedure = single_buffer_thread_allocator_proc, data = ctx}
+	when THREAD {
+		return mem.Allocator{procedure = single_buffer_thread_allocator_proc, data = ctx}
+	} else {
+		return mem.Allocator{procedure = ctx.backing.procedure, data = ctx.backing.data}
+	}
 }
 
 // Allocates shared memory, where each thread receives their own unique memory region
