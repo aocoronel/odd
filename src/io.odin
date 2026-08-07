@@ -1,7 +1,7 @@
 package odd
 
-import "core:os"
 import "core:mem"
+import "core:os"
 
 MAX_IO_BUFF :: 64
 
@@ -19,14 +19,16 @@ open :: proc(
 	return open(name, flags, perm)
 }
 
-fputn :: proc(fd: ^os.File, len: int, c: byte) -> (n: int, err: os.Error) {
+fputn :: proc(fd: ^os.File, count: int, c: byte) -> (n: int, err: os.Error) {
+	assert(count < MAX_IO_BUFF)
 	buff: [MAX_IO_BUFF]byte
-	mem.set(raw_data(buff[:]), c, len)
+	mem.set(raw_data(buff[:]), c, count)
 	return os.write(fd, buff[:])
 }
 
-fputw :: proc(fd: ^os.File, len: int) -> (n: int, err: os.Error) {
+fputw :: proc(fd: ^os.File, count: int) -> (n: int, err: os.Error) {
+	assert(count < MAX_IO_BUFF)
 	buff: [MAX_IO_BUFF]byte
-	mem.set(raw_data(buff[:]), ' ', len)
+	mem.set(raw_data(buff[:]), ' ', count)
 	return os.write(fd, buff[:])
 }
