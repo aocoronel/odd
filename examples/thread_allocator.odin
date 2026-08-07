@@ -1,6 +1,7 @@
 package oc
 
 import odd "../src/"
+import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:mem"
@@ -19,7 +20,14 @@ foo :: proc(ctx: ^thread.Thread) {
 	odd.set_id(ctx.user_index)
 	rng := odd.range(count)
 	fmt.printfln("[%d]: begin: %d, end: %d", odd.get_id(), rng.begin, rng.end)
+
+	opt := log.Options{.Level, .Terminal_Color, .Thread_Id}
+	logger := log.create_console_logger(log.Level.Debug, opt)
+	context.logger = logger
+	defer log.destroy_console_logger(logger)
+
 	context.allocator = ctx.creation_allocator
+
 	{
 		ptr: ^int
 		err: mem.Allocator_Error
@@ -27,6 +35,7 @@ foo :: proc(ctx: ^thread.Thread) {
 		{
 			ptr, err := make([]int, 6)
 			assert(err == nil)
+			defer delete(ptr)
 
 			{
 				assert(len(ptr) == 6)
@@ -35,17 +44,17 @@ foo :: proc(ctx: ^thread.Thread) {
 				assert(ptr[0] == 69)
 				barrier_sync_all()
 			}
-
-			delete(ptr)
 		}
 
 		ptr1, err1 := new(int)
 		assert(err1 == nil)
+		defer free(ptr1)
 
 		ptr1^ = 69
 
 		ptr2, err2 := new(int)
 		assert(err2 == nil)
+		defer free(ptr2)
 
 		ptr2^ = 96
 
@@ -53,45 +62,45 @@ foo :: proc(ctx: ^thread.Thread) {
 		// means that theoretically allocating the second time, could overwrite the first allocation
 		assert(ptr1^ == 69)
 		assert(ptr2^ == 96)
-
-		free(ptr1)
-		free(ptr2)
 	}
 }
 
 main :: proc() {
-	odd.set_count(os.get_processor_core_count())
-
-	opt := log.Options{.Level, .Terminal_Color, .Thread_Id}
-	context.logger = log.create_console_logger(log.Level.Debug, opt)
+	count := os.get_processor_core_count()
+	odd.set_count(count)
 
 	fb: odd.Thread_Allocator
-	fb.leader_id = 0
-
-	count := odd.get_count()
 
 	odd.thread_allocator_init(&fb, count, 0, context.allocator)
-	allocator := odd.multi_buffer_thread_allocator(&fb)
+
 	GLOBAL_BARRIER = &fb.barrier
+	allocator := odd.multi_buffer_thread_allocator(&fb)
 
-	threads: [odd.MAX_THREAD_COUNT]^thread.Thread
+	when odd.THREAD {
+		threads: [odd.MAX_THREAD_COUNT]^thread.Thread
 
-	for i in 0 ..< count {
-		t := thread.create(foo)
-		if t == nil {
-			log.panicf("Failed to create threads")
+		for i in 0 ..< count {
+			t := thread.create(foo)
+			if t == nil {
+				log.panicf("Failed to create threads")
+			}
+			t.user_index = i
+			t.creation_allocator = allocator
+			threads[i] = t
+			thread.start(threads[i])
 		}
-		t.init_context = context
-		t.user_index = i
+
+		thread.join_multiple(..threads[:count])
+
+		for i in 0 ..< count {
+			free(threads[i])
+		}
+	} else {
+		t: thread.Thread
+		t.user_index = 0
 		t.creation_allocator = allocator
-		threads[i] = t
-		thread.start(threads[i])
-	}
-
-	thread.join_multiple(..threads[:count])
-
-	for i in 0 ..< count {
-		free(threads[i])
+		thread.start(&t)
+		foo(&t)
 	}
 
 	fmt.println("End program")
