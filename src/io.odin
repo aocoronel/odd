@@ -16,9 +16,10 @@ open :: proc(
 	^os.File,
 	os.Error,
 ) {
-	return open(name, flags, perm)
+	return os.open(name, flags, perm)
 }
 
+@(require_results)
 fputn :: proc(fd: ^os.File, count: int, c: byte) -> (n: int, err: os.Error) {
 	assert(count < MAX_IO_BUFF)
 	buff: [MAX_IO_BUFF]byte
@@ -26,6 +27,7 @@ fputn :: proc(fd: ^os.File, count: int, c: byte) -> (n: int, err: os.Error) {
 	return os.write(fd, buff[:])
 }
 
+@(require_results)
 fputw :: proc(fd: ^os.File, count: int) -> (n: int, err: os.Error) {
 	assert(count < MAX_IO_BUFF)
 	buff: [MAX_IO_BUFF]byte
