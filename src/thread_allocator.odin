@@ -30,7 +30,7 @@ MAX_THREAD_COUNT :: #config(MAX_THREAD_COUNT, 64)
 ID: int
 
 @(private)
-COUNT: int
+COUNT: int = 1
 
 Thread_Allocator :: struct {
 	backing:      mem.Allocator,
@@ -191,11 +191,12 @@ single_buffer_thread_allocator_proc :: proc(
 		@(static) err: mem.Allocator_Error
 		m := (^Thread_Allocator)(allocator_data)
 
+		sync.barrier_wait(&m.barrier)
+
 		if !is_leader(m) {
-			when ODIN_DEBUG {
-				log.debugf("waits")
-			}
-			sync.barrier_wait(&m.barrier)
+			// when ODIN_DEBUG {
+			// 	log.debugf("waits")
+			// }
 			sync.barrier_wait(&m.barrier)
 			ptr := result
 			return ptr, err
@@ -203,10 +204,10 @@ single_buffer_thread_allocator_proc :: proc(
 
 		#partial switch mode {
 		case .Alloc, .Alloc_Non_Zeroed, .Resize, .Resize_Non_Zeroed:
-			when ODIN_DEBUG {
-				log.debugf(">>> allocate %d bytes", size)
-			}
-			ptr, error := m.backing.procedure(
+			// when ODIN_DEBUG {
+			// 	log.debugf(">>> allocate %d bytes", size)
+			// }
+			ptr, err := m.backing.procedure(
 				m.backing.data,
 				mode,
 				size,
@@ -215,14 +216,13 @@ single_buffer_thread_allocator_proc :: proc(
 				old_size,
 				loc,
 			)
-			sync.barrier_wait(&m.barrier)
-			result, err = ptr, error
+			result = ptr
 			sync.barrier_wait(&m.barrier)
 			return ptr, err
 		case .Free:
-			when ODIN_DEBUG {
-				log.debugf(">>> free")
-			}
+			// when ODIN_DEBUG {
+			// 	log.debugf(">>> free")
+			// }
 			fallthrough
 		case:
 			ptr, error := m.backing.procedure(
@@ -234,12 +234,10 @@ single_buffer_thread_allocator_proc :: proc(
 				old_size,
 				loc,
 			)
-			sync.barrier_wait(&m.barrier)
-			result, err = ptr, error
+			result = ptr
 			sync.barrier_wait(&m.barrier)
 			return ptr, err
 		}
-		sync.barrier_wait(&m.barrier)
 		result, err = nil, nil
 		sync.barrier_wait(&m.barrier)
 		ptr := result
