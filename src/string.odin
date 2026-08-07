@@ -42,7 +42,7 @@ next_line :: proc(s: []byte) -> (word: []byte, rest: []byte) {
 	}
 
 	word = s[0:newline]
-	rest = s[newline:]
+	rest = s[newline + 1:]
 
 	return
 }
@@ -163,11 +163,14 @@ parse_word_test :: proc(t: ^testing.T) {
 next_line_test :: proc(t: ^testing.T) {
 	data: strings.Builder
 	defer strings.builder_destroy(&data)
-	strings.write_string(&data, "hello, \"world \'e\'\" !\n")
+	strings.write_string(&data, "hello, \"world \'e\'\" !\nhi\n")
 
 	word, rest: []byte
 	rest = data.buf[:]
 
 	word, rest = next_line(rest)
 	assert(strings.compare("hello, \"world \'e\'\" !", string(word)) == 0)
+
+	word, rest = next_line(rest)
+	assert(strings.compare("hi", string(word)) == 0)
 }
