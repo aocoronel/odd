@@ -17,7 +17,7 @@ Missing: lexer.odin
 ## Running examples
 
 ```bash
-odin run examples -collection:src=src
+odin run examples -collection:shared=src
 ```
 
 ## License
