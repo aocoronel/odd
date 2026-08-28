@@ -16,7 +16,7 @@ Pipe :: struct {
 /*
 Runs command capturing stdout and stderr
 
-The result can be directly send to another command
+The result can be directly sent to another command
 */
 run_command_pipe :: proc(
 	args: []string,
