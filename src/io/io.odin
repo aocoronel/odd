@@ -1,4 +1,4 @@
-package odd
+package io
 
 import "core:mem"
 import "core:os"

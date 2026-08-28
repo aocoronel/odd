@@ -1,6 +1,5 @@
-package oc
+package example
 
-import odd "../src/"
 import "base:runtime"
 import "core:fmt"
 import "core:log"
@@ -8,6 +7,7 @@ import "core:mem"
 import "core:os"
 import "core:sync"
 import "core:thread"
+import odd "src:alloc"
 
 GLOBAL_BARRIER: ^sync.Barrier
 
@@ -65,7 +65,7 @@ foo :: proc(ctx: ^thread.Thread) {
 	}
 }
 
-main :: proc() {
+thread :: proc() {
 	count := os.get_processor_core_count()
 	odd.set_count(count)
 

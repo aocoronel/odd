@@ -1,4 +1,4 @@
-package odd
+package string
 
 import "core:strings"
 import "core:testing"
@@ -35,6 +35,8 @@ trim :: proc(s: []byte) -> []byte {
 	return s[start:end]
 }
 
+// Returns the line contents in "word", and next lines to "rest"
+// The slice returned to "word" is exclusive from the newline delimiter
 next_line :: proc(s: []byte) -> (word: []byte, rest: []byte) {
 	newline := strings.index_byte(string(s), '\n')
 	if newline == -1 {
@@ -173,4 +175,7 @@ next_line_test :: proc(t: ^testing.T) {
 
 	word, rest = next_line(rest)
 	assert(strings.compare("hi", string(word)) == 0)
+
+	word, rest = next_line(rest)
+	assert(rest == nil)
 }

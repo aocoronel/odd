@@ -1,4 +1,4 @@
-package odd
+package alloc
 
 import "base:runtime"
 import "core:fmt"

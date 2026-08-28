@@ -1,4 +1,4 @@
-package odd
+package alloc
 
 import "core:mem"
 import "core:testing"
@@ -12,13 +12,23 @@ Fixed_Buffer_Allocator :: struct {
 	alignment: int,
 }
 
-fixed_buffer_init :: proc(ctx: ^Fixed_Buffer_Allocator, data: []byte, alignment := mem.DEFAULT_ALIGNMENT) {
+fixed_buffer_init :: proc(
+	ctx: ^Fixed_Buffer_Allocator,
+	data: []byte,
+	alignment := mem.DEFAULT_ALIGNMENT,
+) {
 	ctx.data = data
 	ctx.size = len(data)
 	ctx.alignment = alignment
 }
 
-fixed_buffer_alloc :: proc(ctx: ^Fixed_Buffer_Allocator, size: uint) -> (rawptr, mem.Allocator_Error) {
+fixed_buffer_alloc :: proc(
+	ctx: ^Fixed_Buffer_Allocator,
+	size: uint,
+) -> (
+	rawptr,
+	mem.Allocator_Error,
+) {
 	bytes, err := fixed_buffer_alloc_bytes_non_zeroed(ctx, size)
 	if err != nil {
 		mem.zero_slice(bytes)
@@ -37,7 +47,13 @@ fixed_buffer_alloc_non_zeroed :: proc(
 	return raw_data(bytes), err
 }
 
-fixed_buffer_alloc_bytes :: proc(ctx: ^Fixed_Buffer_Allocator, size: uint) -> ([]byte, mem.Allocator_Error) {
+fixed_buffer_alloc_bytes :: proc(
+	ctx: ^Fixed_Buffer_Allocator,
+	size: uint,
+) -> (
+	[]byte,
+	mem.Allocator_Error,
+) {
 	bytes, err := fixed_buffer_alloc_bytes_non_zeroed(ctx, size)
 	if err != nil {
 		mem.zero_slice(bytes)
