@@ -10,8 +10,6 @@ A very odd collection of libraries from scratch in Odin. This project is the con
 | spinner.odin          | Simple spinner without allocations |
 | thread_allocator.odin | Thread-safe allocator              |
 
-Missing: lexer.odin
-
 > Compared to aoclibs, this has way less code, because Odin implements almost everything I did in there, and with much better API
 
 ## Running examples
