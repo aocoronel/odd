@@ -6,7 +6,6 @@ A very odd collection of libraries from scratch in Odin. This project is the con
 |-----------------------|------------------------------------|
 | cstr.odin             | Mostly parsing procedures          |
 | fixed_buffer.odin     | Simpler arena                      |
-| io.odin               | Minor printing tools               |
 | spinner.odin          | Simple spinner without allocations |
 | thread_allocator.odin | Thread-safe allocator              |
 
