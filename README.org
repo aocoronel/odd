@@ -1,0 +1,21 @@
+* odd
+
+A very odd collection of libraries from scratch in Odin. This project is the continuation of the archived [[https://codeberg.org/aocoronel/aoclibs][aoclibs]], that did the same thing, but in the C programming language.
+
+#+BEGIN_QUOTE
+Compared to aoclibs, this has way less code, because Odin implements almost everything I did in there, and with much better API
+#+END_QUOTE
+
+** Highlights
+
+- ~alloc/thread_allocator.odin~: Thread-safe allocator on the [[https://www.dgtlgrove.com/p/multi-core-by-default][Multicore by default]] style.
+
+** Running examples
+
+#+BEGIN_SRC bash
+odin run examples -collection:shared=.
+#+END_SRC
+
+** License
+
+This repository is licensed under the 3-clause BSD license.
