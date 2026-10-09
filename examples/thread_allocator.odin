@@ -19,7 +19,7 @@ foo :: proc(ctx: ^thread.Thread) {
 	count := 20
 	odd.set_id(ctx.user_index)
 	rng := odd.range(count)
-	fmt.printfln("[%d]: begin: %d, end: %d", odd.get_id(), rng.begin, rng.end)
+	fmt.printfln("[%d]: begin: %d, end: %d", odd.get_id(), rng[0], rng[1])
 
 	opt := log.Options{.Level, .Terminal_Color, .Thread_Id}
 	logger := log.create_console_logger(log.Level.Debug, opt)
@@ -62,6 +62,14 @@ foo :: proc(ctx: ^thread.Thread) {
 		// means that theoretically allocating the second time, could overwrite the first allocation
 		assert(ptr1^ == 69)
 		assert(ptr2^ == 96)
+	}
+	{
+		rng := odd.range(100)
+		sum: int
+		for i in rng {
+			sum += i
+		}
+		fmt.println("Sum: %d", sum)
 	}
 }
 

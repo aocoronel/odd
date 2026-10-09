@@ -1,8 +1,6 @@
 package alloc
 
 import "base:runtime"
-import "core:fmt"
-import "core:log"
 import "core:mem"
 import "core:sync"
 
@@ -39,9 +37,7 @@ Thread_Allocator :: struct {
 	leader_id:    int,
 }
 
-Range :: struct {
-	begin, end: int,
-}
+Range :: [2]int
 
 get_id :: proc() -> int {
 	when THREAD {
@@ -156,7 +152,7 @@ multi_buffer_thread_allocator_proc :: proc(
 		)
 		#partial switch mode {
 		case .Alloc, .Alloc_Non_Zeroed, .Resize, .Resize_Non_Zeroed:
-			return result[rng.begin:rng.end], err
+			return result[rng[0]:rng[1]], err
 		case:
 			return result, err
 		}
