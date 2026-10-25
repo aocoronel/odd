@@ -90,9 +90,9 @@ range :: proc(count: int) -> Range {
 	}
 }
 
-is_leader :: proc(ctx: ^Thread_Allocator) -> bool {
+is_leader :: proc "contextless" () -> bool {
 	when THREAD {
-		return ctx.leader_id == get_id()
+		return 0 == get_id()
 	} else {
 		return true
 	}
