@@ -66,7 +66,7 @@ The end user can pass the flags the following ways:
 
 ~program --verbose --debug~, ~program --verbose:true --debug:0~, ~program --verbose true --debug:False~, ~program --/verbose true --/debug false~, ~program -vd~, ~program -/vd~.
 
-The ~/~ prefix will not apply the values from the flag, but will normally parse it. This is an idea from Tsoding.
+The ~/~ prefix will not apply the values from the flag, but will normally parse it. This is an idea from [[https://www.youtube.com/watch?v=DMuahT5Ae08&t=4726][Tsoding]].
 
 ** Example
 
