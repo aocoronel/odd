@@ -15,10 +15,12 @@ Prints the message with provided indentation.
 
 This procedure will wrap long messages to a newline, and keep up the indentation.
 
+Returns: written bytes
+
 Note: This procedure has been ported from aocoronel/aoclibs crown_iprint()
 */
-iprint :: #force_inline proc(msg: string, indentation: int) {
-	_iprint(msg, indentation, terminal_height())
+iprint :: #force_inline proc(msg: string, indentation: int) -> int {
+	return _iprint(msg, indentation, terminal_height())
 }
 
 /*
@@ -26,13 +28,15 @@ Prints the message with provided indentation.
 
 This procedure will wrap long messages to a newline, and keep up the indentation.
 
+Returns: written bytes
+
 Note: This procedure was created to allow newlines in strings, without inserting those newlines.
 */
-iprint_str :: #force_inline proc(msg: string, indentation: int) {
-	_iprint_str(msg, indentation, terminal_height())
+iprint_str :: #force_inline proc(msg: string, indentation: int) -> int {
+	return _iprint_str(msg, indentation, terminal_height())
 }
 
-_iprint :: proc(msg: string, indentation, width: int) {
+_iprint :: proc(msg: string, indentation, width: int) -> int {
 	line_pos := _indent(indentation)
 
 	i := 0
@@ -63,6 +67,11 @@ _iprint :: proc(msg: string, indentation, width: int) {
 			line_pos = _indent(indentation)
 		}
 
+		// If indentation + word is more than what the width can represent, abort
+		if line_pos + word_len > width {
+			return i
+		}
+
 		print(msg[start:i])
 		line_pos += word_len
 
@@ -72,9 +81,10 @@ _iprint :: proc(msg: string, indentation, width: int) {
 		}
 	}
 	print('\n')
+	return i
 }
 
-_iprint_str :: proc(msg: string, indentation, width: int) {
+_iprint_str :: proc(msg: string, indentation, width: int) -> int {
 	line_pos := _indent(indentation)
 
 	i := 0
@@ -108,6 +118,10 @@ _iprint_str :: proc(msg: string, indentation, width: int) {
 			line_pos = _indent(indentation)
 		}
 
+		if line_pos + word_len > width {
+			return i
+		}
+
 		print(msg[start:i])
 		line_pos += word_len
 
@@ -117,4 +131,5 @@ _iprint_str :: proc(msg: string, indentation, width: int) {
 		}
 	}
 	print('\n')
+	return i
 }
