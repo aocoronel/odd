@@ -3,6 +3,13 @@ package term
 import "core:fmt"
 import "core:strings"
 
+print :: fmt.print
+
+_indent :: #force_inline proc(i: int) -> (pos: int) {
+	print(strings.repeat(" ", i))
+	return i
+}
+
 /*
 Prints the message with provided indentation.
 
@@ -10,11 +17,23 @@ This procedure will wrap long messages to a newline, and keep up the indentation
 
 Note: This procedure has been ported from aocoronel/aoclibs crown_iprint()
 */
-iprint :: proc(msg: string, indent: int) {
-	width, _ := terminal_size()
+iprint :: #force_inline proc(msg: string, indentation: int) {
+	_iprint(msg, indentation, terminal_height())
+}
 
-	fmt.print(strings.repeat(" ", indent))
-	line_pos := indent
+/*
+Prints the message with provided indentation.
+
+This procedure will wrap long messages to a newline, and keep up the indentation.
+
+Note: This procedure was created to allow newlines in strings, without inserting those newlines.
+*/
+iprint_str :: #force_inline proc(msg: string, indentation: int) {
+	_iprint_str(msg, indentation, terminal_height())
+}
+
+_iprint :: proc(msg: string, indentation, width: int) {
+	line_pos := _indent(indentation)
 
 	i := 0
 	n := len(msg)
@@ -22,15 +41,13 @@ iprint :: proc(msg: string, indent: int) {
 	for i < n {
 		r := msg[i]
 
-		if r == '\n' {
-			fmt.print('\n')
-			fmt.print(strings.repeat(" ", indent))
-			line_pos = indent
+		switch r {
+		case '\n':
+			print('\n')
+			line_pos = _indent(indentation)
 			i += 1
 			continue
-		}
-
-		if r == ' ' || r == '\t' {
+		case ' ', '\t':
 			i += 1
 			continue
 		}
@@ -41,19 +58,63 @@ iprint :: proc(msg: string, indent: int) {
 		}
 		word_len := i - start
 
-		if line_pos + word_len > width && line_pos > indent {
-			fmt.print('\n')
-			fmt.print(strings.repeat(" ", indent))
-			line_pos = indent
+		if line_pos + word_len > width && line_pos > indentation {
+			print('\n')
+			line_pos = _indent(indentation)
 		}
 
-		fmt.print(msg[start:i])
+		print(msg[start:i])
 		line_pos += word_len
 
 		if i < n && line_pos < width {
-			fmt.print(' ')
+			print(' ')
 			line_pos += 1
 		}
 	}
-	fmt.print(' ')
+	print('\n')
+}
+
+_iprint_str :: proc(msg: string, indentation, width: int) {
+	line_pos := _indent(indentation)
+
+	i := 0
+	n := len(msg)
+
+	for i < n {
+		r := msg[i]
+
+		switch r {
+		case '\n':
+			i += 1
+			if i < n && msg[i] == '\n' {
+				print('\n')
+				line_pos = _indent(indentation)
+				i += 1
+			}
+			continue
+		case ' ', '\t':
+			i += 1
+			continue
+		}
+
+		start := i
+		for i < n && msg[i] != ' ' && msg[i] != '\t' && msg[i] != '\n' {
+			i += 1
+		}
+		word_len := i - start
+
+		if line_pos + word_len > width && line_pos > indentation {
+			print('\n')
+			line_pos = _indent(indentation)
+		}
+
+		print(msg[start:i])
+		line_pos += word_len
+
+		if i < n && line_pos < width {
+			print(' ')
+			line_pos += 1
+		}
+	}
+	print('\n')
 }
