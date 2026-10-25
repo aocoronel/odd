@@ -41,6 +41,10 @@ This can be used for unsupported types.
 usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_option_by_name) {
 	if compare != nil {sort(opts, compare)}
 	width := term.terminal_width()
+
+	// Edge case, where tty is too small
+	if width < 30 do width = 30
+
 	fmt.println("Options:")
 	loop: for opt in opts {
 		if opt.var == nil do continue
@@ -91,7 +95,7 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 		} else {
 			if _, is_bool := ti.variant.(Type_Info_Boolean); !is_bool {
 				fmt.print(':')
-				print(ti, argtype)
+				print_var(ti, argtype)
 			}
 		}
 
