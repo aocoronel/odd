@@ -37,9 +37,9 @@ pipe :: proc() {
 
 	if sh({"ls"}) do sh({"ls"})
 
-	if sh({"echo", ".emacs.d"}, &p) {
-		if sh({"ls", stdout}, &p) {
-			fmt.println(stdout)
+	if sh({"echo", "odd/"}, &p) {
+		if sh({"ls"}, &p) {
+			fmt.println(string(p.stdout))
 		}
 	}
 }

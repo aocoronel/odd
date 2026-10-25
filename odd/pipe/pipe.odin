@@ -9,8 +9,7 @@ run_command :: proc {
 }
 
 Pipe :: struct {
-	stderr: string,
-	stdout: string,
+	stderr, stdout: []byte,
 }
 
 /*
@@ -25,7 +24,6 @@ run_command_pipe :: proc(
 	working_dir: string = "",
 	env: []string = nil,
 	allocator := context.allocator,
-	logger := context.logger,
 ) -> bool {
 	pd := os.Process_Desc {
 		stdin       = stdin,
@@ -38,8 +36,8 @@ run_command_pipe :: proc(
 	stdout, stderr: []byte
 
 	if len(pipe.stdout) != 0 {
-		defer delete(pipe.stdout)
-		defer delete(pipe.stderr)
+		delete(pipe.stdout)
+		delete(pipe.stderr)
 		state, stdout, stderr, err = os.process_exec(pd, allocator)
 		if err != nil {
 			log.error(os.error_string(err))
@@ -63,8 +61,8 @@ run_command_pipe :: proc(
 		return s
 	}
 
-	pipe.stdout = trim(string(stdout))
-	pipe.stderr = trim(string(stderr))
+	pipe.stdout = stdout
+	pipe.stderr = stderr
 
 	return state.exit_code == 0
 }
@@ -96,7 +94,7 @@ run_command_free :: proc(
 
 	process, err = os.process_start(pd)
 	if err != nil {
-		log.error(os.error_string(err))
+		log.errorf("%s: %s", args[0], os.error_string(err))
 		return false
 	}
 	state, err = os.process_wait(process)
