@@ -1,0 +1,195 @@
+* Flags
+
+This is a flag parser library for CLI arguments. This is written from scratch, but I did look into ~odin/flags~ to learn more about RTTI, since it isn't well documented yet.
+
+The canonical way to easily parse flags is ~odin/flags~, however I was feeling limited by this library for many reasons: Multiple arguments is only supported with ~[dynamic]T~; Many allocations are left for the user to free; Split features between Odin and Unix styles; No control over how the usage is generated; The parser is highly dependent on looping the model structure, and its tags; Parsing ~bit_set~ expects the *end user* passes ~binary~; Doesn't support custom backing sizes for ~bit_set~; No short flag support; Not extensible with custom structures or types, only a few selected ones.
+
+This flag parser is not meant to be better than ~odin/flags~, but to provide a different approach to the same goal. It's supposed to be faster and more extensible, but ~odin/flags~ has a superior user API.
+
+Just like ~odin/flags~ it *can* make heavy use of RTTI for parsing your flags, but mostly can be skipped.
+
+** Supported Types
+
+- Booleans
+- Integers
+- Floats
+- Enums
+- Complex numbers
+- Quaternions
+- Bit sets
+- Strings
+- C strings
+- Runes
+- Structs
+- SIMD Vectors
+- Arrays
+- Dynamic arrays
+- Fixed capacity dynamic arrays
+- Enumerated arrays
+
+** Unsupported Types
+
+The following are all unsupported types. However, as per the goal of the library to be extensible, you can write a custom procedure that can parse any of these types, per specific case, including the types above.
+
+- UTF-16 strings and C strings (yet)
+- Bit fields
+- Typeid
+- Matrix
+- Maps
+- Unions
+- Slices
+- Parameters
+- Procedures
+- Pointers
+- Multiple pointers
+- SOA pointers
+
+** Errors
+
+All errors are written using ~log.error~ and ~log.errorf~. The errors are consistent and try very hard to explain what went wrong, and what it expected.
+
+When the parser fails, it returns an ~.Error~, but the parsing doesn't have to stop. See the example below, to understand why.
+
+** Help
+
+The flags ~-h~ and ~--help~ are reserved, and return ~.Help_Request~ to the user. This library also provides a convenient procedure ~usage()~ to print all the information from the flags, *only*. It's left for the user to manually include any extra information.
+
+The generated message can be customized, when the default isn't obvious to the end user, or hidden.
+
+** Positional arguments
+
+When the parser didn't received an option, it returns ~.Not_Opt~, and the user can use it the way they prefer, from the ~optopt~ variable.
+
+** End user
+
+The end user can pass the flags the following ways:
+
+~program --verbose --debug~, ~program --verbose:true --debug:0~, ~program --verbose true --debug:False~, ~program --/verbose true --/debug false~, ~program -vd~, ~program -/vd~.
+
+The ~/~ prefix will not apply the values from the flag, but will normally parse it. This is an idea from Tsoding.
+
+** Example
+
+Uses most of what the library can do.
+
+#+BEGIN_SRC odin :tangle example.odin
+  package odd_flags
+
+  import "core:log"
+
+  main :: proc() {
+  	Enum :: enum {
+  		Ok,
+  		Maybe_Ok,
+  		Not_Ok,
+  	}
+
+  	// Suggestion: create a struct, so you can pass all the state at once
+  	Options :: struct {
+  		simd:            #simd[4]f64,
+  		verbose:         bool,
+  		debug:           b8,
+  		times:           int,
+  		user:            struct {
+  			name:    string,
+  			enabled: bool,
+  		},
+  		priority:        bit_set['A' ..= 'Z';[4]u64],
+  		ok_level:        Enum,
+  		io:              [2]string,
+  		vaargs:          [dynamic]cstring,
+  		files:           [dynamic; 4]string,
+  		ok_level_string: [Enum]string,
+  	}
+
+  	opts: Options
+
+  	// Don't forget to create a logger. The library depends on it to report errors.
+  	context.logger = log.create_console_logger(opt = {.Level})
+  	defer log.destroy_console_logger(context.logger)
+
+  	// This makes the API boring, but allows better extensibility
+  	opt := []Option {
+  		// short flag is 1 letter
+  		{flag = "v,verbose", var = &opts.verbose, help = `Enables verbosity`},
+  		{
+  			flag = "square",
+  			var  = &opts.simd,
+  			// Help attributes. Affects usage()
+  			help = `#arg=height width posx posy,force
+  			A very long help message
+  			in case it is needed for some reason`,
+  		},
+  		// You can set the "fn" field, to skip most RTTI
+  		{flag = "debug", var = &opts.debug, fn = get_bool, help = `Enable debugging info`},
+  		{flag = "times", var = &opts.times, help = `Number of times to repeat`},
+  		{flag = "user", var = &opts.user, help = `Enable/disable user`},
+  		{flag = "priority", var = &opts.priority, help = `Priority level`},
+  		{flag = "ok_level", var = &opts.ok_level, help = `How ok are you?`},
+  		{flag = "io", var = &opts.io, help = `#arg=FILE
+          Source file and destinat`},
+  		{flag = "vaargs", var = &opts.vaargs, help = "Many files"},
+  		{flag = "files", var = &opts.files, help = `Parse files`},
+  		{flag = "ok_level_string", var = &opts.ok_level_string, help = `Explain how ok are you`},
+  	}
+
+  	// Initialize the map
+  	m, ok := init(opt)
+  	defer delete(m)
+
+  	if !ok do return
+
+  	// This parses all arguments, independently if they fail or not.
+  	// If there are errors, it reports the error, and continue parsing the rest.
+  	// The user can cancel a flag by prefixing it with '/', like --/square.
+  	// In case of "-/vd", both 'v' and 'd' are cancelled.
+  	has_err: bool
+  	for has_args_left() {
+  		err := parse(m, opt)
+  		switch err {
+  		case .Ok:
+  			continue
+  		case .Dash_Dash:
+          // You can opt-in to stop parsing and collect the rest of the arguments:
+  		// rest := get_args()[optind:]
+  		case .Help_Request:
+  			// Print the help your way, and/or use the convenient usage()
+  			usage(opt)
+  			return
+  		case .Not_Opt:
+  		// positional arguments
+  		case .Error:
+  			has_err = true
+  		}
+  	}
+  	if has_err do return
+  }
+#+END_SRC
+
+Generated usage message for this example. The description is written using ~term.iprint_str~, which allows strings to contain newlines, without actually inserting them, unless there are two in sequence, for the sake of wrapping them in the code. ~term.iprint_str~ also prints the description until the maximum width of the tty, gracefully wrapping to the next line following up the indentation.
+
+#+BEGIN_SRC text
+Options:
+  debug
+      Enable debugging info
+  files:[text].. +3
+      Parse files
+  io:FILE.. +1
+      Source file and destinat
+  ok_level:(Ok,Maybe_Ok,Not_Ok)
+      How ok are you?
+  ok_level_string:[(Ok,Maybe_Ok,Not_Ok)=text].. +2
+      Explain how ok are you
+  priority:[A..=Z].. +31
+      Priority level
+  square:height width posx posy
+      A very long help message in case it is needed for some reason
+  times:integer
+      Number of times to repeat
+  user:(name:text) (enabled:bool)
+      Enable/disable user
+  v,verbose
+      Enables verbosity
+  vaargs:[text]..
+      Many files
+#+END_SRC
