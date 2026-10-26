@@ -68,6 +68,10 @@ The end user can pass the flags the following ways:
 
 The ~/~ prefix will not apply the values from the flag, but will normally parse it. This is an idea from [[https://www.youtube.com/watch?v=DMuahT5Ae08&t=4726][Tsoding]].
 
+** Commands
+
+The library was made to parse flags, however it's possible to use all the machinery to parse commands using the same interface. See the example below. Also, the ~usage()~ procedure can be reused for commands.
+
 ** Example
 
 Uses most of what the library can do.
