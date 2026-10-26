@@ -7,7 +7,7 @@ import "core:mem"
 import "core:os"
 import "core:sync"
 import "core:thread"
-import odd "shared:odd/alloc"
+import odd "shared:odd/thread"
 
 GLOBAL_BARRIER: ^sync.Barrier
 

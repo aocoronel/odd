@@ -1,4 +1,4 @@
-package alloc
+package odd_thread
 
 import "base:runtime"
 import "core:mem"
