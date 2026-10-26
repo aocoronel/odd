@@ -4,7 +4,7 @@ package term
 import "core:c"
 import "core:sys/linux"
 
-_terminal_size :: proc() -> (width: int, height: int) {
+_terminal_size :: proc "contextless" () -> (width: int, height: int) {
 	TIOCGWINSZ :: 0x5413
 	STDOUT_FILENO :: 1
 

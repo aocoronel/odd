@@ -4,7 +4,7 @@ package term
 import "core:c"
 import "core:sys/darwin"
 
-_terminal_size :: proc() -> (width: int, height: int) {
+_terminal_size :: proc "contextless" () -> (width: int, height: int) {
 	TIOCGWINSZ :: 0x40087468
 	STDOUT_FILENO :: 1
 	winsize :: struct {
