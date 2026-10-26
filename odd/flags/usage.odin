@@ -86,13 +86,12 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 		fmt.print("  ")
 		fmt.print(opt.flag)
 
-		dereferenced := reflect.deref(opt.var)
-		ti := type_base(dereferenced.id)
-
 		if force && len(argtype) > 0 {
 			fmt.print(':')
 			fmt.print(argtype)
 		} else {
+			dereferenced := reflect.deref(opt.var)
+			ti := type_base(dereferenced.id)
 			if _, is_bool := ti.variant.(Type_Info_Boolean); !is_bool {
 				fmt.print(':')
 				print_var(ti, argtype)
