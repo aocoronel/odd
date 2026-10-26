@@ -45,7 +45,6 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 	// Edge case, where tty is too small
 	if width < 30 do width = 30
 
-	fmt.println("Options:")
 	loop: for opt in opts {
 		if opt.var == nil do continue
 
