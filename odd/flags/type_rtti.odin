@@ -151,8 +151,6 @@ get_rtti_bit_set :: proc(ptr: rawptr, id: typeid) -> bool {
 		_bit_set(ptr, bit, fn, args_count, lower, upper, u64) or_return
 	}
 
-	log.info(max(u128))
-
 	return true
 }
 
