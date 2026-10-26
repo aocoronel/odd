@@ -7,7 +7,7 @@ T :: testing.T
 
 @(test)
 _test :: proc(_: ^T) {
-	debug.register_back_trace()
+	debug.register_backtrace()
 	Enum :: enum {
 		Ok,
 		Not_Ok,
