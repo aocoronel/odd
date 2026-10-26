@@ -40,11 +40,11 @@ errorf :: log.errorf
 
 /*
 Example:
-  Use RTTI -> { flag = "v,verbose", help = "Enable verbosity", var = &verbose }
-  No RTTI -> { flag = "v,verbose", help = "Enable verbosity", var = &verbose, fn = get_bool }
+  Use RTTI -> { name = "v,verbose", help = "Enable verbosity", var = &verbose }
+  No RTTI -> { name = "v,verbose", help = "Enable verbosity", var = &verbose, fn = get_bool }
 */
 Option :: struct {
-	flag, help: string,
+	name, help: string,
 	var:        any,
 	fn:         Get_Proc,
 }

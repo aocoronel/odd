@@ -84,7 +84,7 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 		}
 
 		fmt.print("  ")
-		fmt.print(opt.flag)
+		fmt.print(opt.name)
 
 		if force && len(argtype) > 0 {
 			fmt.print(':')
@@ -109,7 +109,7 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 }
 
 sort_option_by_name :: proc(i, j: Option) -> slice.Ordering {
-	return slice.cmp(i.flag, j.flag)
+	return slice.cmp(i.name, j.name)
 }
 
 sort :: #force_inline proc(opts: []Option, compare: Sort_Option = sort_option_by_name) {

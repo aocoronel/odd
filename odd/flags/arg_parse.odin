@@ -1,7 +1,6 @@
 package odd_flags
 
 import "base:runtime"
-import "core:reflect"
 import "core:strings"
 
 optind: int = 1 // current option index (skip program)
@@ -141,7 +140,7 @@ call :: proc(opt: []Option, entry: u32, ignore: bool) -> bool {
 	var := opt[idx].var
 
 	if var == nil {
-		errorf("%s: variable is not set", opt[idx].flag)
+		errorf("%s: variable is not set", opt[idx].name)
 		return false
 	}
 
@@ -149,20 +148,25 @@ call :: proc(opt: []Option, entry: u32, ignore: bool) -> bool {
 	#partial switch info in ti.variant {
 	case runtime.Type_Info_Pointer:
 	case:
-		errorf("%s: variable must be a pointer, got: %v", opt[idx].flag, var.id)
+		errorf("%s: variable must be a pointer, got: %v", opt[idx].name, var.id)
 		return false
 	}
 
-	dereferenced := reflect.deref(var)
-	ptr, _ := reflect.as_pointer(var)
+	ptr: rawptr
+	id: typeid
+
+	if info, ok := ti.variant.(Type_Info_Pointer); ok {
+		ptr = (^rawptr)(var.data)^
+		id = info.elem.id
+	}
 
 	if ignore do ptr = nil
 
 	ok: bool
 	if fn != nil {
-		ok = fn(ptr, dereferenced.id)
+		ok = fn(ptr, id)
 	} else {
-		ok = get_rtti(ptr, dereferenced.id)
+		ok = get_rtti(ptr, id)
 	}
 
 	return ok
@@ -174,11 +178,11 @@ init :: proc(opts: []Option) -> (m: map[string]u32, ok: bool) {
 	for opt, i in opts {
 		long: string
 
-		if len(opt.flag) > 2 && opt.flag[1] == ',' {
-			long = opt.flag[2:]
-			shortopt_lut[opt.flag[0]] = cast(u32)i + 1
+		if len(opt.name) > 2 && opt.name[1] == ',' {
+			long = opt.name[2:]
+			shortopt_lut[opt.name[0]] = cast(u32)i + 1
 		} else {
-			long = opt.flag[:]
+			long = opt.name[:]
 		}
 
 		m[long] = cast(u32)i + 1
