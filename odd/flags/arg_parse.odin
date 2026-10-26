@@ -11,6 +11,8 @@ optval: string // -flag value
 
 args__ := runtime.args__
 
+shortopt_lut: [128]u32
+
 /*
 os.get_args allocates
 */
@@ -64,7 +66,7 @@ is_next_option :: #force_inline proc "contextless" () -> bool {
 	return is_option(optarg)
 }
 
-parse :: proc(m: map[string]int, opt: []Option) -> (err: Result) {
+parse :: proc(m: map[string]u32, opt: []Option) -> (err: Result) {
 
 	shift :: #force_inline proc "contextless" (arg: string) -> (string, Result) #no_bounds_check {
 		return arg[1:], cast(Result)(len(arg[1:]) == 0)
@@ -93,12 +95,12 @@ parse :: proc(m: map[string]int, opt: []Option) -> (err: Result) {
 			}
 			optopt = args[0:1]
 
-			entry := m[optopt]
+			entry := shortopt_lut[args[0]]
 			if entry == 0 {
 				errorf("%s: option does not exist", optopt)
 				return .Error
 			}
-			if entry == -1 do return .Help_Request
+			if entry == ~u32(0) do return .Help_Request
 			if !call(opt, entry, ignore) do return .Error
 			args = shift(args) or_break
 		}
@@ -126,14 +128,14 @@ parse :: proc(m: map[string]int, opt: []Option) -> (err: Result) {
 			errorf("%s: option does not exist", optopt)
 			return .Error
 		}
-		if entry == -1 do return .Help_Request
+		if entry == ~u32(0) do return .Help_Request
 		if !call(opt, entry, ignore) do return .Error
 	}
 
 	return .Ok
 }
 
-call :: proc(opt: []Option, entry: int, ignore: bool) -> bool {
+call :: proc(opt: []Option, entry: u32, ignore: bool) -> bool {
 	idx := entry - 1
 	fn := opt[idx].fn
 	var := opt[idx].var
@@ -166,7 +168,7 @@ call :: proc(opt: []Option, entry: int, ignore: bool) -> bool {
 	return ok
 }
 
-init :: proc(opts: []Option) -> (m: map[string]int, ok: bool) {
+init :: proc(opts: []Option) -> (m: map[string]u32, ok: bool) {
 	ok = true
 
 	for opt, i in opts {
@@ -174,12 +176,12 @@ init :: proc(opts: []Option) -> (m: map[string]int, ok: bool) {
 
 		if len(opt.flag) > 2 && opt.flag[1] == ',' {
 			long = opt.flag[2:]
-			m[opt.flag[0:1]] = i + 1
+			shortopt_lut[opt.flag[0]] = cast(u32)i + 1
 		} else {
 			long = opt.flag[:]
 		}
 
-		m[long] = i + 1
+		m[long] = cast(u32)i + 1
 
 		// TBD: define NO_RTTI
 		when false {
@@ -191,8 +193,8 @@ init :: proc(opts: []Option) -> (m: map[string]int, ok: bool) {
 	}
 
 	// builtin
-	m["h"] = -1
-	m["help"] = -1
+	shortopt_lut['h'] = ~u32(0)
+	m["help"] = ~u32(0)
 
 	return m, ok
 }
