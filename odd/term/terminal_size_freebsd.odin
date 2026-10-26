@@ -1,5 +1,5 @@
 #+build freebsd
-package term
+package odd_term
 
 import "core:c"
 import "core:sys/freebsd"

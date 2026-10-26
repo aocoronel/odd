@@ -1,4 +1,4 @@
-package term
+package odd_term
 
 import "base:runtime"
 

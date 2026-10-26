@@ -1,4 +1,4 @@
-package alloc
+package odd_alloc
 
 import "core:mem"
 import "core:testing"

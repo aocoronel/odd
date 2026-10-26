@@ -1,4 +1,4 @@
-package tokenizer
+package odd_tokenizer
 
 import "core:fmt"
 import "core:unicode"

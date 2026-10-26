@@ -1,5 +1,8 @@
-package term
+package odd_term
 
+/*
+Currently supports: Linux, FreeBSD, Darwin and Windows.
+*/
 terminal_size :: proc "contextless" () -> (width: int, height: int) {
 	return _terminal_size()
 }

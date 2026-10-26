@@ -1,4 +1,4 @@
-package string
+package odd_string
 
 import "core:strings"
 import "core:testing"

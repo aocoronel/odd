@@ -1,4 +1,4 @@
-package debug
+package odd_debug
 
 import "base:runtime"
 import "core:c"
@@ -7,7 +7,14 @@ import "core:debug/trace"
 import "core:fmt"
 import "core:os"
 
-register_back_trace :: proc() {
+/*
+Register a signal handler to capture the backtrace of the program.
+
+The backtrace size can be customized with -define:ODIN_TRACE_SIZE.
+
+The backtrace supports both .Odin and .Unix styles.
+*/
+register_backtrace :: proc() {
 	Signals :: enum {
 		SIGABRT = 6,
 		SIGFPE  = 8,
