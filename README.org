@@ -8,7 +8,13 @@ Compared to aoclibs, this has way less code, because Odin implements almost ever
 
 ** Highlights
 
-- ~alloc/thread_allocator.odin~: Thread-safe allocator on the [[https://www.dgtlgrove.com/p/multi-core-by-default][Multicore by default]] style.
+- ~odd/debug~: backtrace on SIGSEGV.
+- ~odd/encoding~: supports parsing: CSV.
+- ~odd/flags~: reimagination of ~odin/flags~, based on ~aocoronel/aoclibs~ Crown library.
+- ~odd/pipe~: thin wrapper for ~os.process_exec~ and ~os.process_start~.
+- ~odd/term~: cross-platform terminal size.
+- ~odd/thread~: thread-safe allocator on the [[https://www.dgtlgrove.com/p/multi-core-by-default][Multicore by default]] style.
+- ~odd/tokenizer~: simple tokenizer, that supports text, integers and comma.
 
 ** Running examples
 
