@@ -46,8 +46,6 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 	if width < 30 do width = 30
 
 	loop: for opt in opts {
-		if opt.var == nil do continue
-
 		argtype: string
 		force: bool
 		help := opt.help
@@ -89,11 +87,13 @@ usage :: proc(opts: []Option, indent: int = 6, compare: Sort_Option = sort_optio
 			fmt.print(':')
 			fmt.print(argtype)
 		} else {
-			dereferenced := reflect.deref(opt.var)
-			ti := type_base(dereferenced.id)
-			if _, is_bool := ti.variant.(Type_Info_Boolean); !is_bool {
-				fmt.print(':')
-				print_var(ti, argtype)
+			if opt.var != nil {
+				dereferenced := reflect.deref(opt.var)
+				ti := type_base(dereferenced.id)
+				if _, is_bool := ti.variant.(Type_Info_Boolean); !is_bool {
+					fmt.print(':')
+					print_var(ti, argtype)
+				}
 			}
 		}
 
