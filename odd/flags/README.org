@@ -77,6 +77,8 @@ The library was made to parse flags, however it's possible to use all the machin
 Uses most of what the library can do.
 
 #+BEGIN_SRC odin :tangle example.odin
+  #+ignore
+
   package odd_flags
 
   import "core:log"

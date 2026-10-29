@@ -1,3 +1,5 @@
+#+ignore
+
 package odd_flags
 
 import "core:log"
