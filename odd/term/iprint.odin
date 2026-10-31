@@ -1,14 +1,14 @@
 package odd_term
 
-import "base:runtime"
+import "core:fmt"
+import "core:os"
 
-print_string :: runtime.print_string
-print_rune :: runtime.print_rune
+print :: fmt.fprint
 
-_indent :: #force_inline proc "contextless" (i: int) -> (pos: int) {
+_indent :: #force_inline proc(i: int, file: ^os.File) -> (pos: int) {
 	buff: [32]u8
 	for i in 0 ..< 32 do buff[i] = ' '
-	print_string(string(buff[:i]))
+	print(file, string(buff[:i]))
 	return i
 }
 
@@ -21,8 +21,8 @@ Returns: written bytes
 
 Note: This procedure has been ported from aocoronel/aoclibs crown_iprint()
 */
-iprint :: #force_inline proc "contextless" (msg: string, indentation: int) -> int {
-	return _iprint(msg, indentation, terminal_height())
+iprint :: #force_inline proc(msg: string, indentation: int, file := os.stderr) -> int {
+	return _iprint(msg, indentation, terminal_height(), file)
 }
 
 /*
@@ -34,12 +34,12 @@ Returns: written bytes
 
 Note: This procedure was created to allow newlines in strings, without inserting those newlines.
 */
-iprint_str :: #force_inline proc "contextless" (msg: string, indentation: int) -> int {
-	return _iprint_str(msg, indentation, terminal_height())
+iprint_str :: #force_inline proc(msg: string, indentation: int, file := os.stderr) -> int {
+	return _iprint_str(msg, indentation, terminal_height(), file)
 }
 
-_iprint :: proc "contextless" (msg: string, indentation, width: int) -> int {
-	line_pos := _indent(indentation)
+_iprint :: proc(msg: string, indentation, width: int, file := os.stderr) -> int {
+	line_pos := _indent(indentation, file)
 
 	i := 0
 	n := len(msg)
@@ -49,8 +49,8 @@ _iprint :: proc "contextless" (msg: string, indentation, width: int) -> int {
 
 		switch r {
 		case '\n':
-			print_rune('\n')
-			line_pos = _indent(indentation)
+			print(file, '\n')
+			line_pos = _indent(indentation, file)
 			i += 1
 			continue
 		case ' ', '\t':
@@ -65,8 +65,8 @@ _iprint :: proc "contextless" (msg: string, indentation, width: int) -> int {
 		word_len := i - start
 
 		if line_pos + word_len > width && line_pos > indentation {
-			print_rune('\n')
-			line_pos = _indent(indentation)
+			print(file, '\n')
+			line_pos = _indent(indentation, file)
 		}
 
 		// If indentation + word is more than what the width can represent, abort
@@ -74,20 +74,20 @@ _iprint :: proc "contextless" (msg: string, indentation, width: int) -> int {
 			return i
 		}
 
-		print_string(msg[start:i])
+		print(file, msg[start:i])
 		line_pos += word_len
 
 		if i < n && line_pos < width {
-			print_rune(' ')
+			print(file, ' ')
 			line_pos += 1
 		}
 	}
-	print_rune('\n')
+	print(file, '\n')
 	return i
 }
 
-_iprint_str :: proc "contextless" (msg: string, indentation, width: int) -> int {
-	line_pos := _indent(indentation)
+_iprint_str :: proc(msg: string, indentation, width: int, file := os.stderr) -> int {
+	line_pos := _indent(indentation, file)
 
 	i := 0
 	n := len(msg)
@@ -99,8 +99,8 @@ _iprint_str :: proc "contextless" (msg: string, indentation, width: int) -> int 
 		case '\n':
 			i += 1
 			if i < n && msg[i] == '\n' {
-				print_rune('\n')
-				line_pos = _indent(indentation)
+				print(file, '\n')
+				line_pos = _indent(indentation, file)
 				i += 1
 			}
 			continue
@@ -116,22 +116,22 @@ _iprint_str :: proc "contextless" (msg: string, indentation, width: int) -> int 
 		word_len := i - start
 
 		if line_pos + word_len > width && line_pos > indentation {
-			print_rune('\n')
-			line_pos = _indent(indentation)
+			print(file, '\n')
+			line_pos = _indent(indentation, file)
 		}
 
 		if line_pos + word_len > width {
 			return i
 		}
 
-		print_string(msg[start:i])
+		print(file, msg[start:i])
 		line_pos += word_len
 
 		if i < n && line_pos < width {
-			print_rune(' ')
+			print(file, ' ')
 			line_pos += 1
 		}
 	}
-	print_rune('\n')
+	print(file, '\n')
 	return i
 }
