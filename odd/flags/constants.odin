@@ -63,3 +63,9 @@ Get_Proc :: #type proc(ptr: rawptr, id: typeid) -> bool
 -flag:value
 */
 SEPARATOR :: #config(ODD_FLAGS_SEPARATOR, ':')
+
+/*
+Force some types to require a valid value:
+Affects: parse_boolean
+*/
+STRICT :: #config(ODD_FLAGS_STRICT, false)
