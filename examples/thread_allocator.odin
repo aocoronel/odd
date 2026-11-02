@@ -4,34 +4,30 @@ import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:mem"
-import "core:os"
-import "core:sync"
 import "core:thread"
+import "shared:odd/debug"
 import odd "shared:odd/thread"
 
-GLOBAL_BARRIER: ^sync.Barrier
+foo :: proc(args: []any) {
+	debug.register_backtrace()
 
-barrier_sync_all :: proc() {
-	odd.barrier_wait(GLOBAL_BARRIER)
-}
+	fmt.println(args) // ["foo", 1, 2, 3]
 
-foo :: proc(ctx: ^thread.Thread) {
-	count := 20
-	odd.set_id(ctx.user_index)
-	rng := odd.range(count)
-	fmt.printfln("[%d]: begin: %d, end: %d", odd.get_id(), rng[0], rng[1])
+	rng := odd.range(20)
+	log.infof("[%d]: begin: %d, end: %d", odd.thread_id(), rng[0], rng[1])
 
-	opt := log.Options{.Level, .Terminal_Color, .Thread_Id}
-	logger := log.create_console_logger(log.Level.Debug, opt)
-	context.logger = logger
-	defer log.destroy_console_logger(logger)
+	mrt_alloc := odd.thread_allocator_init(context.allocator)
+	mrt := odd.multi_region_thread_allocator(&mrt_alloc)
 
-	context.allocator = ctx.creation_allocator
+	context.allocator = mrt
+
+	// Not recommended to put this on context.allocator
+	// It's fine to use the mrt allocator to initialize the srt allocator
+	// But we could just have used the mrt_alloc, instead
+	srt_alloc := odd.thread_allocator_init(context.allocator)
+	srt := odd.single_region_thread_allocator(&srt_alloc)
 
 	{
-		ptr: ^int
-		err: mem.Allocator_Error
-
 		{
 			ptr, err := make([]int, 6)
 			assert(err == nil)
@@ -40,76 +36,86 @@ foo :: proc(ctx: ^thread.Thread) {
 			{
 				assert(len(ptr) == 6)
 				ptr[0] = 69
-				barrier_sync_all()
 				assert(ptr[0] == 69)
-				barrier_sync_all()
 			}
 		}
 
 		ptr1, err1 := new(int)
-		assert(err1 == nil)
 		defer free(ptr1)
+		assert(err1 == nil)
 
 		ptr1^ = 69
 
 		ptr2, err2 := new(int)
-		assert(err2 == nil)
 		defer free(ptr2)
+		assert(err2 == nil)
 
 		ptr2^ = 96
 
-		// These assertions are here, because we share the same memory over static variables, which
-		// means that theoretically allocating the second time, could overwrite the first allocation
+		// Threads are synchronized between allocations
 		assert(ptr1^ == 69)
 		assert(ptr2^ == 96)
 	}
+
+
 	{
-		rng := odd.range(100)
-		sum: int
-		for i in rng {
-			sum += i
+		rng_sum := new(int)
+		defer free(rng_sum)
+		dyn_sum := new(int)
+		defer free(dyn_sum)
+
+		rng := odd.range(101)
+		for i in rng[0] ..< rng[1] {
+			rng_sum^ += i
 		}
-		fmt.println("Sum: %d", sum)
+
+		@(static) tasks: int
+		for i in odd.next(&tasks, 101) {
+			dyn_sum^ += i
+		}
+
+		odd.wait()
+		if odd.is_leader() {
+			_buf := (cast([^]int)rng_sum)[:odd.thread_count()]
+			rng_reduce: int
+			for i in _buf {
+				rng_reduce += i
+			}
+			_buf = (cast([^]int)dyn_sum)[:odd.thread_count()]
+			dyn_reduce: int
+			for i in _buf {
+				dyn_reduce += i
+			}
+			fmt.println("Range sum:", rng_reduce)
+			fmt.println("Dynamic sum:", dyn_reduce)
+			assert(dyn_reduce == rng_reduce && dyn_reduce == 5050)
+		}
 	}
+
+	// Set to true, to check backtrace
+	when false {
+		#no_bounds_check {
+			str := "hello!"
+			unsafe_arr := transmute([]u8)str
+			unsafe_arr[0] = 'b'
+		}
+	}
+
+	return
 }
 
 thread :: proc() {
-	count := os.get_processor_core_count()
-	odd.set_count(count)
+	opt := log.Options{.Level, .Terminal_Color, .Thread_Id}
+	logger := log.create_console_logger(log.Level.Debug, opt)
+	context.logger = logger
+	defer log.destroy_console_logger(logger)
 
-	fb: odd.Thread_Allocator
-
-	odd.thread_allocator_init(&fb, count, 0, context.allocator)
-
-	GLOBAL_BARRIER = &fb.barrier
-	allocator := odd.multi_buffer_thread_allocator(&fb)
-
-	when odd.THREAD {
-		threads: [odd.MAX_THREAD_COUNT]^thread.Thread
-
-		for i in 0 ..< count {
-			t := thread.create(foo)
-			if t == nil {
-				log.panicf("Failed to create threads")
-			}
-			t.user_index = i
-			t.creation_allocator = allocator
-			threads[i] = t
-			thread.start(threads[i])
-		}
-
-		thread.join_multiple(..threads[:count])
-
-		for i in 0 ..< count {
-			free(threads[i])
-		}
-	} else {
-		t: thread.Thread
-		t.user_index = 0
-		t.creation_allocator = allocator
-		thread.start(&t)
-		foo(&t)
+	state, err := odd.start(foo, "foo", 1, 2, 3)
+	if err != nil {
+		fmt.println(err)
+		return
 	}
+	odd.join(state)
 
 	fmt.println("End program")
 }

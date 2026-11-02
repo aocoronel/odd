@@ -1,132 +1,81 @@
 package odd_thread
 
 import "base:runtime"
+import "core:log"
 import "core:mem"
 import "core:sync"
 
-// Thread Allocator
-//
-// Differently from mem.Mutex_Allocator, which just puts a mutex between allocator calls, this one
-// performs a single call per thread group, allocating enough memory for all threads and dispatching
-// the different regions of the same buffer to each thread.
-//
-// This implementation is opt-in, since both single-threadding and multi-threadding support is
-// provided.
-//
-// Inspired by:
-// https://www.dgtlgrove.com/p/multi-core-by-default
-// https://codeberg.org/aocoronel/aoclibs/src/branch/main/src/thread.c
-// https://github.com/aocoronel/multicore
-
-THREAD :: #config(THREAD, false)
-
-// Assume modern computers can't go more than 64 CPUs
-MAX_THREAD_COUNT :: #config(MAX_THREAD_COUNT, 64)
-
-@(thread_local)
-@(private)
-ID: int
-
-@(private)
-COUNT: int = 1
-
 Thread_Allocator :: struct {
-	backing:      mem.Allocator,
-	barrier:      sync.Barrier,
-	thread_count: int,
-	leader_id:    int,
+	backing:   mem.Allocator,
+	barrier:   ^sync.Barrier,
+	leader_id: int,
 }
 
-Range :: [2]int
+/*
+Use case: When you want to split threads to do different tasks.
 
-get_id :: proc() -> int {
-	when THREAD {
-		return ID
-	} else {
-		return 0
-	}
+Note: the provided barrier should either be static, global or
+allocated using the single_region_thread_allocator.
+*/
+thread_allocator_init :: proc {
+	thread_allocator_init_context,
+	thread_allocator_init_explicit,
 }
 
-barrier_wait :: proc(barrier: ^sync.Barrier) {
-	when THREAD {
-		sync.barrier_wait(barrier)
-	}
-}
-
-get_count :: proc() -> int {
-	when THREAD {
-		return COUNT
-	} else {
-		return 1
-	}
-}
-
-set_id :: proc(id: int) {
-	when THREAD {
-		ID = id
-	}
-}
-
-set_count :: proc(count: int) {
-	when THREAD {
-		COUNT = count
-	}
-}
-
-range :: proc(count: int) -> Range {
-	when THREAD {
-		id := get_id()
-		thread_count := get_count()
-		values_per_thread := count / thread_count
-		leftover_values_count := count % thread_count
-		thread_has_leftover: bool = id < leftover_values_count
-		leftovers_before_this_thread_idx := thread_has_leftover ? id : leftover_values_count
-		thread_first_value_idx := values_per_thread * id + leftovers_before_this_thread_idx
-		thread_opl_value_idx :=
-			thread_first_value_idx + values_per_thread + int(thread_has_leftover)
-		return Range{thread_first_value_idx, thread_opl_value_idx}
-	} else {
-		return Range{0, count}
-	}
-}
-
-is_leader :: proc "contextless" () -> bool {
-	when THREAD {
-		return 0 == get_id()
-	} else {
-		return true
-	}
-}
-
-thread_allocator_init :: proc(
-	ctx: ^Thread_Allocator,
-	thread_count, leader_id: int,
+thread_allocator_init_explicit :: #force_inline proc "contextless" (
 	allocator: mem.Allocator,
-) {
-	ctx.backing = allocator
-	ctx.thread_count = thread_count
-	ctx.leader_id = leader_id
-	sync.barrier_init(&ctx.barrier, thread_count)
+	barrier: ^sync.Barrier,
+	thread_count: int,
+	leader_id: int = 0,
+) -> Thread_Allocator {
+	return {allocator, barrier, leader_id}
 }
 
-multi_buffer_thread_allocator :: proc(ctx: ^Thread_Allocator) -> mem.Allocator {
+/*
+Convenience procedure, if you want to use the thread context.
+*/
+thread_allocator_init_context :: #force_inline proc "contextless" (
+	allocator: mem.Allocator,
+) -> Thread_Allocator {
+	return {allocator, CONTEXT_STATE.barrier, 0}
+}
+
+mrt_allocator :: multi_region_thread_allocator
+multi_region_thread_allocator :: #force_inline proc "contextless" (
+	ctx: ^Thread_Allocator,
+) -> mem.Allocator {
 	when THREAD {
-		return mem.Allocator{procedure = multi_buffer_thread_allocator_proc, data = ctx}
+		return mem.Allocator{procedure = multi_region_thread_allocator_proc, data = ctx}
 	} else {
 		return mem.Allocator{procedure = ctx.backing.procedure, data = ctx.backing.data}
 	}
 }
 
-single_buffer_thread_allocator :: proc(ctx: ^Thread_Allocator) -> mem.Allocator {
+/*
+This procedure may check if the ctx.backing allocator is multi_region_thread_allocator
+The is reason is, that it's more likely to be put on the context.allocator, and
+if the srt_allocator was in the context, many procedures that are not part of this
+framework would cause data races.
+*/
+srt_allocator :: single_region_thread_allocator
+single_region_thread_allocator :: #force_inline proc "contextless" (
+	ctx: ^Thread_Allocator,
+) -> mem.Allocator {
 	when THREAD {
-		return mem.Allocator{procedure = single_buffer_thread_allocator_proc, data = ctx}
+		if ctx.backing.procedure == multi_region_thread_allocator_proc {
+			return mem.Allocator {
+				procedure = single_region_thread_allocator_proc,
+				data = ctx.backing.data,
+			}
+		}
+		return mem.Allocator{procedure = single_region_thread_allocator_proc, data = ctx}
 	} else {
 		return mem.Allocator{procedure = ctx.backing.procedure, data = ctx.backing.data}
 	}
 }
 
 // Allocates shared memory, where each thread receives their own unique memory region
-multi_buffer_thread_allocator_proc :: proc(
+multi_region_thread_allocator_proc :: proc(
 	allocator_data: rawptr,
 	mode: mem.Allocator_Mode,
 	size, alignment: int,
@@ -139,9 +88,9 @@ multi_buffer_thread_allocator_proc :: proc(
 ) {
 	when THREAD {
 		m := (^Thread_Allocator)(allocator_data)
-		size := size * m.thread_count
+		size := size * m.barrier.thread_count
 		rng := range(size)
-		result, err := single_buffer_thread_allocator_proc(
+		result, err := single_region_thread_allocator_proc(
 			allocator_data,
 			mode,
 			size,
@@ -171,7 +120,7 @@ multi_buffer_thread_allocator_proc :: proc(
 }
 
 // Allocates shared memory, where each thread receives the same memory region
-single_buffer_thread_allocator_proc :: proc(
+single_region_thread_allocator_proc :: proc(
 	allocator_data: rawptr,
 	mode: mem.Allocator_Mode,
 	size, alignment: int,
@@ -187,15 +136,16 @@ single_buffer_thread_allocator_proc :: proc(
 		@(static) err: mem.Allocator_Error
 		m := (^Thread_Allocator)(allocator_data)
 
-		sync.barrier_wait(&m.barrier)
+		// This barrier prevents overwriting result
+		// after subsequent calls
+		sync.barrier_wait(m.barrier)
 
-		if !is_leader(m) {
+		if !is_leader(m.leader_id) {
 			// when ODIN_DEBUG {
 			// 	log.debugf("waits")
 			// }
-			sync.barrier_wait(&m.barrier)
-			ptr := result
-			return ptr, err
+			sync.barrier_wait(m.barrier)
+			return result, err
 		}
 
 		#partial switch mode {
@@ -203,7 +153,7 @@ single_buffer_thread_allocator_proc :: proc(
 			// when ODIN_DEBUG {
 			// 	log.debugf(">>> allocate %d bytes", size)
 			// }
-			ptr, err := m.backing.procedure(
+			result, err = m.backing.procedure(
 				m.backing.data,
 				mode,
 				size,
@@ -212,16 +162,15 @@ single_buffer_thread_allocator_proc :: proc(
 				old_size,
 				loc,
 			)
-			result = ptr
-			sync.barrier_wait(&m.barrier)
-			return ptr, err
+			sync.barrier_wait(m.barrier)
+			return result, err
 		case .Free:
 			// when ODIN_DEBUG {
 			// 	log.debugf(">>> free")
 			// }
 			fallthrough
 		case:
-			ptr, error := m.backing.procedure(
+			result, err = m.backing.procedure(
 				m.backing.data,
 				mode,
 				size,
@@ -230,14 +179,12 @@ single_buffer_thread_allocator_proc :: proc(
 				old_size,
 				loc,
 			)
-			result = ptr
-			sync.barrier_wait(&m.barrier)
-			return ptr, err
+			sync.barrier_wait(m.barrier)
+			return result, err
 		}
 		result, err = nil, nil
-		sync.barrier_wait(&m.barrier)
-		ptr := result
-		return ptr, err
+		sync.barrier_wait(m.barrier)
+		return result, err
 	} else {
 		m := (^Thread_Allocator)(allocator_data)
 		return m.backing.procedure(
