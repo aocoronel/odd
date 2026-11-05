@@ -1,5 +1,6 @@
 package odd_mem
 
+import "base:intrinsics"
 import "base:runtime"
 
 /*
@@ -39,19 +40,31 @@ I thought it would be useful to comment on it, since I learned it by
 writing C, and I never really saw anyone doing this before.
 */
 malloc :: #force_inline proc(
-	#any_int size: uint,
+	#any_int size: int,
 	allocator := context.allocator,
+	loc := #caller_location,
 ) -> (
 	ptr: rawptr,
 	err: runtime.Allocator_Error,
 ) #optional_allocator_error {
-	return rawptr(make([^]u8, size, allocator) or_return), nil
+	data := allocator.procedure(
+		allocator.data,
+		.Alloc,
+		size,
+		align_of(u8),
+		nil,
+		0,
+		location = loc,
+	) or_return
+	return raw_data(data), nil
 }
 
 shift :: proc {
 	shift_bytes,
 	shift_type,
 	shift_slice,
+	shift_from_slice_to_type,
+	shift_from_slice_to_slice,
 }
 
 shift_bytes :: #force_inline proc "contextless" (ptr: rawptr, size: int) -> rawptr {
@@ -68,4 +81,19 @@ shift_slice :: #force_inline proc "contextless" (
 	length: int,
 ) -> []O #no_bounds_check {
 	return (cast([^]O)rawptr(uintptr(ptr) + uintptr(size_of(T))))[:length]
+}
+
+shift_from_slice_to_type :: #force_inline proc "contextless" (
+	ptr: []$T,
+	$O: typeid,
+) -> ^O #no_bounds_check {
+	return cast(^O)rawptr(uintptr(raw_data(ptr)) + uintptr(size_of(T) * len(ptr)))
+}
+
+shift_from_slice_to_slice :: #force_inline proc "contextless" (
+	ptr: []$T,
+	$O: typeid,
+	length: int,
+) -> []O #no_bounds_check {
+	return (cast([^]O)rawptr(uintptr(raw_data(ptr)) + uintptr(size_of(T) * len(ptr))))[:length]
 }

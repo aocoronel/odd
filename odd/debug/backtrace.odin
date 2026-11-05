@@ -27,10 +27,8 @@ register_backtrace :: proc() {
 	}
 
 	handler :: proc "cdecl" (signal: c.int) {
-		when thread.THREAD {
-			if thread.CONTEXT_STATE != nil {
-				sync.mutex_lock(thread.CONTEXT_STATE.err)
-			}
+		if thread.CONTEXT_POOL != nil {
+			sync.mutex_lock(&thread.CONTEXT_POOL.err)
 		}
 
 		SKIP :: 2
@@ -74,7 +72,10 @@ register_backtrace :: proc() {
 		trace.print(locations)
 		trace.locations_destroy(locations)
 
-		thread._terminate_all(cast(int)signal)
+		if thread.CONTEXT_POOL != nil {
+			thread.CONTEXT_POOL.should_die = true
+		}
+		runtime.trap()
 	}
 
 	for signal in Signals {

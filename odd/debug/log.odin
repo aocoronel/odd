@@ -1,20 +1,11 @@
 package odd_debug
 
 import "core:log"
-import "shared:odd/thread"
 
 when ODIN_DEBUG {
-	when thread.THREAD {
-		LOGGER_OPT :: log.Options{.Level, .Terminal_Color, .Short_File_Path, .Line, .Thread_Id}
-	} else {
-		LOGGER_OPT :: log.Options{.Level, .Terminal_Color, .Short_File_Path, .Line}
-	}
+	LOGGER_OPT :: log.Options{.Level, .Terminal_Color, .Short_File_Path, .Line}
 } else {
-	when thread.THREAD {
-		LOGGER_OPT :: log.Options{.Level, .Terminal_Color, .Thread_Id}
-	} else {
-		LOGGER_OPT :: log.Options{.Level, .Terminal_Color}
-	}
+	LOGGER_OPT :: log.Options{.Level, .Terminal_Color}
 }
 
 short_level_header :: #force_inline proc() {
