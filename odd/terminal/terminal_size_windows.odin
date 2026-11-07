@@ -1,5 +1,5 @@
 #+build windows
-package odd_term
+package odd_terminal
 
 import "core:sys/windows"
 

@@ -1,5 +1,5 @@
 #+build linux
-package odd_term
+package odd_terminal
 
 import "core:c"
 import "core:sys/linux"

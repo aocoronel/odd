@@ -7,7 +7,7 @@ import "core:reflect"
 import "core:slice"
 import "core:strings"
 import "shared:odd/encoding"
-import "shared:odd/term"
+import "shared:odd/terminal"
 
 Sort_Option :: #type proc(i, j: Option) -> slice.Ordering
 
@@ -46,7 +46,7 @@ usage :: proc(
 	file := os.stderr,
 ) {
 	if compare != nil {sort(opts, compare)}
-	width := term.terminal_width()
+	width := terminal.terminal_width()
 
 	// Edge case, where tty is too small
 	if width < 30 do width = 30
@@ -108,7 +108,7 @@ usage :: proc(
 		print(file, '\n')
 
 		if len(help) > 0 {
-			term._iprint_str(help, indent, width)
+			terminal._iprint_str(help, indent, width)
 		} else {
 			print(file, "      Option not documented yet\n")
 		}

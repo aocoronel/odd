@@ -1,6 +1,5 @@
 package odd_mem
 
-import "base:intrinsics"
 import "base:runtime"
 
 /*

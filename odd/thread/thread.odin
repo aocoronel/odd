@@ -267,7 +267,7 @@ start :: proc(
 	args: [thread.MAX_USER_ARGUMENTS]rawptr = nil,
 	thread_count: int = -1,
 	context_name: string = "thread",
-	allocator := context.allocator,
+	_context: runtime.Context = context,
 	starter: thread.Thread_Proc = _start,
 ) -> (
 	pool: ^Pool,
@@ -304,7 +304,7 @@ start :: proc(
 		t.data = pool
 		t.user_index = i
 		t.user_args = args
-		t.init_context = context
+		t.init_context = _context
 		thread.start(t)
 	}
 

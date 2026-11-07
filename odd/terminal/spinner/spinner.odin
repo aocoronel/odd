@@ -1,4 +1,4 @@
-package odd_spinner
+package odd_terminal_spinner
 
 @(rodata)
 SPINNER_SYMBOLS := []string{"⠁", "⠈", "⠐", "⠠", "⢀", "⡀", "⠄", "⠂"}

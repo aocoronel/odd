@@ -1,4 +1,4 @@
-package odd_term
+package odd_terminal
 
 /*
 Currently supports: Linux, FreeBSD, Darwin and Windows.

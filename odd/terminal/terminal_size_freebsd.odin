@@ -1,8 +1,8 @@
-#+build darwin
-package odd_term
+#+build freebsd
+package odd_terminal
 
 import "core:c"
-import "core:sys/darwin"
+import "core:sys/freebsd"
 
 _terminal_size :: proc "contextless" () -> (width: int, height: int) {
 	TIOCGWINSZ :: 0x40087468
@@ -12,9 +12,12 @@ _terminal_size :: proc "contextless" () -> (width: int, height: int) {
 	}
 
 	w: winsize
-	if darwin.syscall_ioctl(STDOUT_FILENO, TIOCGWINSZ, cast(uintptr)&w) == -1 || w.col == 0 {
+
+	ok, _ := freebsd.ioctl(STDOUT_FILENO, TIOCGWINSZ, cast(uintptr)&w)
+
+	if ok == -1 || w.col == 0 {
 		w.col = 80
 	}
 
-	return cast(int)w.col, cast(int)w.rows
+	return cast(int)w.cols, cast(int)w.rows
 }

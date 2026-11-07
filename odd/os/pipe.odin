@@ -1,4 +1,4 @@
-package odd_pipe
+package odd_os
 
 import "core:log"
 import "core:os"

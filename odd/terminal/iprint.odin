@@ -1,4 +1,4 @@
-package odd_term
+package odd_terminal
 
 import "core:fmt"
 import "core:os"

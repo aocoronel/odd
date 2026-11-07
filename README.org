@@ -1,20 +1,21 @@
 * odd
 
-A very odd collection of libraries from scratch in Odin. This project is the continuation of the archived [[https://codeberg.org/aocoronel/aoclibs][aoclibs]], that did the same thing, but in the C programming language.
+A very odd collection from scratch in Odin, implementing odd ideas, or reinventing what Odin already did in it's collections.
 
 #+BEGIN_QUOTE
-Compared to aoclibs, this has way less code, because Odin implements almost everything I did in there, and with much better API
+This project is the continuation of the unmaintained [[https://codeberg.org/aocoronel/aoclibs][aocoronel/aoclibs]], that did the same thing, but in the C programming language.
 #+END_QUOTE
 
 ** Highlights
 
-- ~odd/debug~: backtrace on SIGSEGV.
-- ~odd/encoding~: supports parsing: CSV.
-- ~odd/flags~: reimagination of ~odin/flags~, based on ~aocoronel/aoclibs~ Crown library.
-- ~odd/pipe~: thin wrapper for ~os.process_exec~ and ~os.process_start~.
-- ~odd/term~: cross-platform terminal size.
-- ~odd/thread~: thread-safe allocator on the [[https://www.dgtlgrove.com/p/multi-core-by-default][Multicore by default]] style.
-- ~odd/tokenizer~: simple tokenizer, that supports text, integers and comma.
+- ~debug~: backtrace on relevant signals.
+- ~encoding/csv.odin~: supports parsing: CSV.
+- ~encoding/tokenizer~: simple tokenizer, that supports text, integers and comma.
+- ~flags~: reimagination of ~odin/flags~, based on ~aocoronel/aoclibs~ Crown library.
+- ~mem/c.odin~: forbidden C techniques.
+- ~os/pipe.odin~: thin wrapper for ~os.process_exec~ and ~os.process_start~.
+- ~terminal/terminal_size.odin~: cross-platform terminal size.
+- ~thread~: thread pool inspired by [[https://www.dgtlgrove.com/p/multi-core-by-default][Multicore by default]].
 
 ** Running examples
 
