@@ -8,7 +8,11 @@ optopt: string // current option
 optarg: string // current argument
 optval: string // -flag value
 
-args__ := runtime.args__
+when ODIN_OS == .Windows {
+	args__ := runtime.args__.([]cstring16)
+} else {
+	args__ := runtime.args__.([]cstring)
+}
 
 shortopt_lut: [128]u32
 
