@@ -9,7 +9,7 @@ This project is the continuation of the unmaintained [[https://codeberg.org/aoco
 ** Highlights
 
 - ~debug~: backtrace on relevant signals.
-- ~encoding/csv.odin~: supports parsing: CSV.
+- ~encoding/csv.odin~: dead simple CSV parser.
 - ~encoding/tokenizer~: simple tokenizer, that supports text, integers and comma.
 - ~flags~: reimagination of ~odin/flags~, based on ~aocoronel/aoclibs~ Crown library.
 - ~mem/c.odin~: forbidden C techniques.
