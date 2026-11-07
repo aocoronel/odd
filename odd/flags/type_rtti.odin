@@ -56,7 +56,7 @@ _get_rtti :: proc(ptr: rawptr, ti: ^Type_Info) -> bool {
 	case Type_Info_Any:
 		unimplemented("as far as I know, 'any' should never be passed as a pointer.")
 	}
-	panic("unreachable")
+	unreachable()
 }
 
 get_rtti_enum :: proc(ptr: rawptr, id: typeid) -> bool {
@@ -252,7 +252,7 @@ _enumerated_array_offset :: proc(idx: int, array: ^_Array) -> (i: int, ok: bool)
 	case Type_Info_Enum:
 		get_rtti_enum(&i, array.index.id) or_return
 	case:
-		panic("unreachable")
+		unreachable()
 	}
 
 	optval = value[eq + 1:]
@@ -355,7 +355,7 @@ get_rtti_array :: proc(ptr: rawptr, id: typeid) -> bool {
 		data := mem.byte_slice(ptr, v.count * v.elem_size) if ptr != nil else nil
 		array = {_enumerated_array_offset, data, v.elem, v.index, v.count, v.elem_size}
 	case:
-		panic("unreachable")
+		unreachable()
 	}
 
 	c32 :: complex32
@@ -458,7 +458,7 @@ get_rtti_integer :: proc(id: typeid) -> Get_Proc {
 	case i128le: return get_i128le
 	// odinfmt: enable
 	}
-	panic("unreachable")
+	unreachable()
 }
 
 get_rtti_float :: proc(id: typeid) -> Get_Proc {
@@ -472,7 +472,7 @@ get_rtti_float :: proc(id: typeid) -> Get_Proc {
 	case f64be: return get_f64be
 	// odinfmt: enable
 	}
-	panic("unreachable")
+	unreachable()
 }
 
 get_rtti_complex :: proc(ptr: rawptr, id: typeid) -> bool {
@@ -483,7 +483,7 @@ get_rtti_complex :: proc(ptr: rawptr, id: typeid) -> bool {
 	case complex128: return get_complex128(ptr, id)
 	// odinfmt: enable
 	}
-	panic("unreachable")
+	unreachable()
 }
 
 get_rtti_quaternion :: proc(ptr: rawptr, id: typeid) -> bool {
@@ -494,7 +494,7 @@ get_rtti_quaternion :: proc(ptr: rawptr, id: typeid) -> bool {
 	case quaternion256: return get_quaternion256(ptr, id)
 	// odinfmt: enable
 	}
-	panic("unreachable")
+	unreachable()
 }
 
 get_rtti_bool :: proc(id: typeid) -> Get_Proc {
@@ -507,7 +507,7 @@ get_rtti_bool :: proc(id: typeid) -> Get_Proc {
 	case b64:  return get_b64
 	// odinfmt: enable
 	}
-	panic("unreachable")
+	unreachable()
 }
 
 get_rtti_string :: proc(ptr: rawptr, id: typeid) -> bool {
@@ -519,5 +519,5 @@ get_rtti_string :: proc(ptr: rawptr, id: typeid) -> bool {
     case cstring16: unimplemented("UTF-16")
 	// odinfmt: enable
 	}
-	panic("unreachable")
+	unreachable()
 }
