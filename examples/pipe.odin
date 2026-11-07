@@ -5,7 +5,7 @@ package example
 import "core:fmt"
 import "core:log"
 import "core:mem"
-import "shared:odd/pipe"
+import pipe "shared:odd/os"
 
 sh :: pipe.run_command
 Pipe :: pipe.Pipe

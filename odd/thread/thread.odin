@@ -5,9 +5,9 @@ import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:sync"
+import vg "core:sys/valgrind"
 import "core:thread"
 import "shared:odd/mem"
-import "shared:odd/thread/sema"
 
 Task_Proc :: proc(t: ^Task)
 
@@ -17,16 +17,23 @@ Task :: struct {
 	done: int,
 }
 
-/*
-In THREAD, all values are available in CONTEXT_POOL, otherwise
-only fn and barreir are valid.
-*/
 Pool :: struct {
-	queue:                  [dynamic]^Task,
-	threads:                []^thread.Thread,
-	mutex, err:             sync.Mutex,
-	sema:                   sema.Sema,
-	should_die, should_end: bool,
+	// Won't shrink, but memory is reused
+	queue:         [dynamic]^Task,
+	threads:       []^thread.Thread,
+	sema:          sync.Futex,
+	// Lock queue interaction
+	mutex:         sync.Mutex,
+	// Locks on thread failure
+	err:           sync.Mutex,
+	tasks_pending: int,
+	// Signals threads to clear their memory
+	should_reset:  bool,
+	// A thread has an error
+	should_die:    bool,
+	// Signal threads to gracefully stop after
+	// completing all remaining tasks
+	should_end:    bool,
 }
 
 Error :: union {
@@ -36,7 +43,6 @@ Error :: union {
 
 Multicore_Error :: enum {
 	Ok = 0,
-	Too_Many_Args,
 	Creation_Failed, // EINVAL, EPERM, EAGAIN
 }
 
@@ -60,30 +66,34 @@ CONTEXT_THREAD_COUNT: int
 CONTEXT_POOL: ^Pool
 
 /*
-Returns the thread id from the current context. Not to be confused with
-thread.Thread.id.
+Returns the thread id from the current context.
+Not to be confused with core:thread Thread.id.
+Associate to the user_index Odin nomenclature
 */
 thread_id :: #force_inline proc "contextless" () -> int {
 	return CURRENT_THREAD_ID
 }
 
 /*
-Returns how many threads make part of the current context
+Returns how many threads make part of the current context.
 */
 thread_count :: #force_inline proc "contextless" () -> int {
 	return CONTEXT_THREAD_COUNT
 }
 
 /*
-    Example: assuming 1 thread
+Dispatch almost equivalent work. If the task at hand have variadic
+completion times, prefer next()
 
-      rng := range(101)
-      sum: int
-      for i in rng[0] ..< rng[1] {
-        sum += i
-      }
-      assert(sum == 5050)
-  */
+Example: assuming 1 thread
+
+  rng := range(101)
+  sum: int
+  for i in rng[0] ..< rng[1] {
+    sum += i
+  }
+  assert(sum == 5050)
+*/
 range :: proc "contextless" (count: int) -> Range {
 	id, thread_count := thread_id(), thread_count()
 	per_thread, leftover := count / thread_count, count % thread_count
@@ -93,11 +103,15 @@ range :: proc "contextless" (count: int) -> Range {
 }
 
 /*
+Perform work stealing.
+
+"tasks" must be shared between threads.
+
 Example: assuming 1 thread
 
   @(static) tasks: int
   sum: int
-  for i in next(tasks, 101) {
+  for i in next(&tasks, 101) {
     sum += i
   }
   assert(sum == 5050)
@@ -107,25 +121,68 @@ next :: #force_inline proc "contextless" (tasks: ^int, count: int) -> (int, bool
 	return idx, idx < count
 }
 
-broadcast :: proc(ptr: ^$T, barrier: ^sync.Barrier, leader_id := 0) -> ^T {
-	@(static) result: ^T
-
-	sync.barrier_wait(&barrier)
-
-	if thread_id() == leader_id {
-		sync.barrier_wait(&barrier)
-		return result
+/*
+Wakes all threads up, and post a new task
+*/
+@(synchronizes = .Release)
+sema_post :: proc(pool: ^Pool, task: ^Task) -> runtime.Allocator_Error {
+	when ODIN_VALGRIND_SUPPORT {
+		vg.helgrind_sem_post_pre(&pool.sema)
 	}
 
-	result = ptr
-	sync.barrier_wait(&barrier)
-	return ptr
+	{
+		sync.guard(&pool.mutex)
+		append(&pool.queue, task) or_return
+	}
+
+	intrinsics.atomic_add_explicit(&pool.sema, 1, .Release)
+	sync.futex_broadcast(&pool.sema)
+
+	return nil
 }
 
 /*
-Thread procedure initialization
+Waits until a new task is posted, or the thread should stop.
 */
-_start :: proc(t: ^thread.Thread) {
+@(synchronizes = .Acquire)
+sema_wait :: proc(pool: ^Pool, last_generation: ^sync.Futex, should_reset: ^bool) -> ^Task {
+	last_gen := last_generation^
+	for {
+		current := intrinsics.atomic_load_explicit(&pool.sema, .Acquire)
+
+		// Wait until all threads are done
+		if intrinsics.unlikely(
+			pool.should_end && intrinsics.atomic_load(&pool.tasks_pending) == 0,
+		) {
+			return nil
+		}
+
+		// Only runs on wait_task
+		if intrinsics.unlikely(should_reset^ != pool.should_reset) {
+			should_reset^ = !should_reset^
+			last_gen = 0
+			free_all(context.temp_allocator)
+		}
+
+		if current > last_gen {
+			when ODIN_VALGRIND_SUPPORT {
+				vg.helgrind_sem_wait_post(&pool.sema)
+			}
+			last_generation^ = last_gen + 1
+			// Lock against reallocation
+			sync.guard(&pool.mutex)
+			return pool.queue[last_gen]
+		}
+
+		sync.futex_wait(&pool.sema, u32(current))
+	}
+	unreachable()
+}
+
+/*
+Thread procedure initialization.
+*/
+_init :: proc(t: ^thread.Thread) {
 	pool := (cast(^Pool)t.data)
 
 	CONTEXT_POOL = pool
@@ -133,33 +190,23 @@ _start :: proc(t: ^thread.Thread) {
 	CURRENT_THREAD_ID = t.user_index
 
 	last_generation: sync.Futex
+	should_reset := false
 
-	// when !runtime.ODIN_DISABLE_ASSERT {
-	context.assertion_failure_proc = default_assertion_failure_proc
-	// }
+	when !ODIN_DISABLE_ASSERT {
+		context.assertion_failure_proc = default_assertion_failure_proc
+	}
 
 	for {
-		sema.wait(&pool.sema, &last_generation)
-		task_index := int(last_generation) - 1
+		task := sema_wait(pool, &last_generation, &should_reset)
 
-		tasks: int
+		if task == nil do break
 
-		{
-			sync.guard(&pool.mutex)
-			tasks = len(pool.queue)
-		}
+		task.fn(task)
 
-		if pool.should_end && task_index == tasks do break
-
-		if intrinsics.unlikely(task_index > tasks) {
-			last_generation = 0; task_index = 0
-			free_all(context.temp_allocator)
-		}
-
-		if task_index < tasks {
-			task := pool.queue[task_index]
-			task.fn(task)
-			intrinsics.atomic_add_explicit(&task.done, 1, .Seq_Cst)
+		done := intrinsics.atomic_add_explicit(&task.done, 1, .Seq_Cst) + 1
+		// Only last thread is allowed to decrease the counter
+		if done == thread_count() {
+			intrinsics.atomic_sub_explicit(&pool.tasks_pending, 1, .Seq_Cst)
 		}
 	}
 }
@@ -188,13 +235,12 @@ add_task :: proc(
 	task.fn = fn
 	task.data = args
 
-	{
-		sync.guard(&pool.mutex)
-		_, err = append(&pool.queue, task)
-		if err != nil {free(task); return}
-	}
+	intrinsics.atomic_add_explicit(&pool.tasks_pending, 1, .Seq_Cst)
 
-	sema.post(&pool.sema)
+	if err = sema_post(pool, task); err != nil {
+		free(task)
+		return nil, err
+	}
 
 	return
 }
@@ -210,20 +256,28 @@ destroy_task :: proc(task: ^Task) {
 }
 
 /*
-Waits until all threads finished all tasks. Should be called at main thread.
+Waits until all threads finished all tasks.
+
+Should be called at main thread.
+
 This will also clear the queue and temp_allocator from all threads.
 */
-wait_task :: proc(pool: ^Pool) {
-	if pool == nil do return
-	last_queue := pool.queue[len(pool.queue) - 1]
+wait_task :: proc(pool: ^Pool) -> bool {
+	if pool == nil do return false
 	for {
-		if last_queue.done >= len(pool.threads) || pool.should_die do break
+		if intrinsics.atomic_load(&pool.tasks_pending) == 0 do break
+		if pool.should_die do return false
 		thread.yield()
 	}
 
+	pool.should_reset = !pool.should_reset
+	pool.sema = 0
 	clear(&pool.queue)
+
+	return true
 }
 
+// TBD: destroy
 terminate :: proc(pool: ^Pool, error_code := 1) {
 	if pool == nil do return
 
@@ -236,6 +290,7 @@ terminate :: proc(pool: ^Pool, error_code := 1) {
 	thread.terminate(threads[current_thread], error_code)
 }
 
+// TBD: always support thread failure
 default_assertion_failure_proc :: proc(
 	prefix, message: string,
 	loc: runtime.Source_Code_Location,
@@ -248,44 +303,28 @@ default_assertion_failure_proc :: proc(
 }
 
 /*
-Starts at least 1 thread to run "fn", if THREAD is true.
-
-You can provide any parameter, within the boundaries of thread.MAX_USER_ARGUMENTS.
-
-Example:
-
-  pool, err := start(foo, "foo", "bar", "baz")
-  if err != nil {
-    fmt.println(err); return
-  }
-  join(pool)
+TBD
 
 You can also start multiple times for different contexts.
 */
 @(require_results)
-start :: proc(
+init :: proc(
 	args: [thread.MAX_USER_ARGUMENTS]rawptr = nil,
 	thread_count: int = -1,
 	context_name: string = "thread",
-	_context: runtime.Context = context,
-	starter: thread.Thread_Proc = _start,
+	pass_context: bool = true,
+	starter: thread.Thread_Proc = _init,
 ) -> (
 	pool: ^Pool,
 	err: Error,
 ) {
-	if len(args) > thread.MAX_USER_ARGUMENTS {
-		err = .Too_Many_Args; return
-	}
-
 	thread_count := os.get_processor_core_count() if thread_count < 1 else thread_count
 
 	pool = auto_cast mem.malloc(size_of(Pool) + (size_of(^thread.Thread) * thread_count)) or_return
 	pool.threads = mem.shift(pool, ^thread.Thread, thread_count)
 
-	/*
-      Create all threads first, because if any fails, no thread has
-      yet started executing, avoid having to terminate them.
-    */
+	// Create all threads first, because if any fails, no thread has
+	// yet started executing, avoid having to terminate them.
 	for i in 0 ..< thread_count {
 		// create() uses context.allocator
 		t := thread.create(starter, name = fmt.tprintf("%s-%d", context_name, i))
@@ -298,6 +337,8 @@ start :: proc(
 		}
 		pool.threads[i] = t
 	}
+
+	_context: Maybe(runtime.Context) = context if pass_context else nil
 
 	for i in 0 ..< thread_count {
 		t := pool.threads[i]
@@ -312,15 +353,23 @@ start :: proc(
 }
 
 /*
-Joins all threads created by start, and clear their memory.
+Joins all threads created by init, and clear their memory.
 */
 join :: proc(pool: ^Pool) {
 	if pool == nil do return
 	pool.should_end = true
+
+	for intrinsics.atomic_load(&pool.tasks_pending) != 0 {
+		thread.yield()
+	}
+
+	intrinsics.atomic_add_explicit(&pool.sema, 1, .Release)
+	sync.futex_broadcast(&pool.sema)
+
 	threads := pool.threads
-	sema.post(&pool.sema)
 	thread.join_multiple(..threads[:])
 	allocator := threads[0].creation_allocator
+
 	for t in threads {
 		free(t, allocator)
 	}
