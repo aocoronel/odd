@@ -46,7 +46,7 @@ thread :: proc() {
 
 bar :: proc(t: ^thread.Task) {
 	out := (cast(^int)t.data[0])
-	intrinsics.atomic_add_explicit(out, thread.thread_id(), .Seq_Cst)
+	intrinsics.atomic_add_explicit(out, thread.current_thread_id, .Seq_Cst)
 }
 
 baz :: proc(t: ^thread.Task) {
@@ -56,7 +56,7 @@ baz :: proc(t: ^thread.Task) {
 	rng := thread.range(len(arr))
 	// All threads wil get here, but not all of them may print this
 	for i in rng[0] ..< rng[1] {
-		fmt.printfln("baz[%d]: %s", thread.thread_id(), arr[i])
+		fmt.printfln("baz[%d]: %s", thread.current_thread_id, arr[i])
 	}
 }
 
@@ -99,7 +99,7 @@ rc_thread :: proc(t: ^thread.Task) {
 				log.error(os.error_string(err))
 				continue
 			}
-			rc(thread.CONTEXT_POOL, fs)
+			rc(thread.context_pool, fs)
 		} else {
 			fmt.println(f.fullpath)
 		}

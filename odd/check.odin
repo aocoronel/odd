@@ -11,6 +11,5 @@ package odd
 @(require) import "terminal"
 @(require) import "terminal/spinner"
 @(require) import "thread"
-@(require) import "thread/sema"
 
 main :: proc() {}
