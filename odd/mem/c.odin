@@ -82,10 +82,7 @@ shift_slice :: #force_inline proc "contextless" (
 	return (cast([^]O)rawptr(uintptr(ptr) + uintptr(size_of(T))))[:length]
 }
 
-shift_from_slice_to_type :: #force_inline proc "contextless" (
-	ptr: []$T,
-	$O: typeid,
-) -> ^O #no_bounds_check {
+shift_from_slice_to_type :: #force_inline proc "contextless" (ptr: []$T, $O: typeid) -> ^O {
 	return cast(^O)rawptr(uintptr(raw_data(ptr)) + uintptr(size_of(T) * len(ptr)))
 }
 
