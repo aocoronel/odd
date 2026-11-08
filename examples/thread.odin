@@ -27,7 +27,8 @@ thread :: proc() {
 	_ = thread.add_task(pool, bar, &sum)
 
 	arr := []string{"foo", "bar", "baz"}
-	// thread.add_task(pool, baz, &
+	thread.add_task(pool, baz, &arr)
+
 	// Wait all tasks to finish, and clear queue
 	thread.wait_task(pool)
 
@@ -87,7 +88,7 @@ rc_thread :: proc(t: ^thread.Task) {
 	files := cast(^[]os.File_Info)t.data[0]
 	tasks := cast(^int)t.data[1]
 
-	// thread.range does NOT requires all threads from the context to be present
+	// thread.next does NOT requires all threads from the context to be present
 	// If one thread fails for whatever reason, other threads might still complete this
 	// It's a "might", because threads allocate memory to add a new task
 	for i in thread.next(tasks, len(files)) {
