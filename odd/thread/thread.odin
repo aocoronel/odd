@@ -277,17 +277,14 @@ wait_task :: proc(pool: ^Pool) -> bool {
 	return true
 }
 
-// TBD: destroy
+/*
+Forcibly terminates all threads.
+*/
 terminate :: proc(pool: ^Pool, error_code := 1) {
 	if pool == nil do return
-
-	threads := pool.threads
-	current_thread := thread_id()
-	for t, i in threads {
-		if t == nil || i == current_thread do continue
+	for t, i in pool.threads {
 		thread.terminate(t, error_code)
 	}
-	thread.terminate(threads[current_thread], error_code)
 }
 
 // TBD: always support thread failure
