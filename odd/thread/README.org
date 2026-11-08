@@ -1,0 +1,45 @@
+* Thread
+
+This provides yet another thread pool.
+
+** Features
+
+- Enqueue tasks from any thread.
+- Tasks are executed by all threads, not just one.
+- Provides ~range~ for lock-free iterations.
+- Provides ~next_static~ and ~next_dynamic~ for lock-free iterations with work-stealing.
+- Set a custom thread ~runner~.
+- TBD: thread error handling
+- That's pretty much it. Simplicity is also a feature.
+
+** Take a taste
+
+#+BEGIN_SRC odin
+  // A small wrapper to rc_thread, for type safety
+  rc :: proc(pool: ^thread.Pool, files: []os.File_Info, allocator := context.temp_allocator) {
+  	context.allocator = allocator
+  	files_ptr := new([]os.File_Info)
+  	files_ptr^ = files
+  	thread.add_task(pool, rc_thread, files_ptr, new(int))
+  }
+
+  // Print all files in directory, recursively
+  rc_thread :: proc(t: ^thread.Task) {
+  	files := cast(^[]os.File_Info)t.data[0]
+  	tasks := cast(^int)t.data[1]
+
+  	for i in thread.next(tasks, len(files)) {
+          f := files[i]
+  		if f.type == .Directory {
+  			fs, err := os.read_directory_by_path(f.fullpath, -1, context.temp_allocator)
+  			if err != nil {
+  				log.errorf("t[%d]: %s: %s", thread.current_thread_id, f.fullpath, os.error_string(err))
+  				continue
+  			}
+  			rc(thread.context_pool, fs)
+  		} else {
+  			fmt.println(f.fullpath)
+  		}
+  	}
+  }
+#+END_SRC
