@@ -322,9 +322,9 @@ If tasks are created in threads in recursion, use a temp_allocator, instead.
 Threads that create a task also should run that task, which makes
 "defer destroy_task" not an option.
 */
-destroy_task :: proc(task: ^Task) {
+destroy_task :: proc(task: ^Task, allocator := context.temp_allocator) {
 	if task == nil do return
-	free(task)
+	free(task, allocator)
 }
 
 /*
