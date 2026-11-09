@@ -73,7 +73,7 @@ fixed_buffer_alloc_bytes_non_zeroed :: proc(
 	}
 
 	offset := mem.align_forward_uint(ctx.len, uint(ctx.alignment))
-	ctx.len += size
+	ctx.len = offset + size
 
 	return ctx.data[offset:offset + size], nil
 }

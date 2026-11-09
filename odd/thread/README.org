@@ -2,15 +2,26 @@
 
 This provides yet another thread pool.
 
+Inspired by:
+
+- Odin's thread_pool.odin
+- https://aocoronel.github.io/multicore
+- https://github.com/aocoronel/aoclibs/blob/main/src/thread.c
+- https://www.dgtlgrove.com/p/multi-core-by-default
+
 ** Features
 
-- Enqueue tasks from any thread.
+- Enqueue tasks from any thread, to any pool.
 - Tasks are executed by all threads, not just one.
 - Provides ~range~ for lock-free iterations.
 - Provides ~next_static~ and ~next_dynamic~ for lock-free iterations with work-stealing.
 - Set a custom thread ~runner~.
-- TBD: thread error handling
+- Assertion procedure doesn't exit, letting main thread cleanup
 - That's pretty much it. Simplicity is also a feature.
+
+Making a universal library that can beautifully handle all use cases is impossible, or would be extensibly complicated. For example, I've been working on a ~wait~ procedure that can perfeclty wait on all pools, and tell when they are done, but if there is a pool that is independent and can add tasks at any time, it requires a different approach, possibly at the user level.
+
+This API tries to be both simple and extensible. Many convenience procedures are available at [[./easy]], but you can use the parts to make your own high level API, accordingly to your specific cases.
 
 ** Take a taste
 

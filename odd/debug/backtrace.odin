@@ -9,6 +9,15 @@ import "core:os"
 import "core:sync"
 import "shared:odd/thread"
 
+_Signals :: enum {
+	SIGABRT = libc.SIGABRT,
+	SIGFPE  = libc.SIGFPE,
+	SIGILL  = libc.SIGILL,
+	SIGINT  = libc.SIGINT,
+	SIGSEGV = libc.SIGSEGV,
+	SIGTERM = libc.SIGTERM,
+}
+
 /*
 Register a signal handler to capture the backtrace of the program.
 
@@ -17,68 +26,74 @@ The backtrace size can be customized with -define:ODIN_TRACE_SIZE.
 The backtrace supports both .Odin and .Unix styles.
 */
 register_backtrace :: proc() {
-	Signals :: enum {
-		SIGABRT = libc.SIGABRT,
-		SIGFPE  = libc.SIGFPE,
-		SIGILL  = libc.SIGILL,
-		SIGINT  = libc.SIGINT,
-		SIGSEGV = libc.SIGSEGV,
-		SIGTERM = libc.SIGTERM,
+	when ODIN_DEBUG {
+		for signal in _Signals {
+			libc.signal(cast(i32)signal, _handler)
+		}
+	}
+}
+
+register_thread_backtrace :: proc() {
+	when ODIN_DEBUG {
+		for signal in _Signals {
+			libc.signal(cast(i32)signal, _thread_handler)
+		}
+	}
+}
+
+_thread_handler :: proc "cdecl" (signal: c.int) {
+	if thread.broadcast_error() {
+		print_backtrace(signal)
 	}
 
-	handler :: proc "cdecl" (signal: c.int) {
-		if thread.context_pool != nil {
-			sync.mutex_lock(&thread.context_pool.err)
-		}
+	parker: sync.Parker
+	sync.park(&parker) // park forever
+}
 
-		SKIP :: 2
-		context = runtime.default_context()
-		capture := trace.capture(SKIP) // 2 skip the signal handler stack trace
-		locations, err := trace.resolve(capture)
-		if err != nil {
-			fmt.eprintfln("trace error: %v", err)
-			os.exit(1)
-		}
-		location := locations[0]
-		runtime.print_string(location.file_path)
+_handler :: proc "cdecl" (signal: c.int) {
+	print_backtrace(signal)
+	os.exit(int(signal))
+}
 
-		if location.line > 0 {
-			when ODIN_ERROR_POS_STYLE == .Default {
-				runtime.print_string("(")
-				runtime.print_i64(i64(location.line))
-				if location.column > 0 {
-					runtime.print_string(":")
-					runtime.print_i64(i64(location.column))
-				}
-				runtime.print_string(")")
-			} else when ODIN_ERROR_POS_STYLE == .Unix {
+print_backtrace :: proc "cdecl" (signal: c.int) {
+	SKIP :: 3
+	context = runtime.default_context()
+	capture := trace.capture(SKIP) // 2 skip the signal handler stack trace
+	locations, err := trace.resolve(capture)
+	if err != nil {
+		fmt.eprintfln("trace error: %v", err)
+		return
+	}
+	location := locations[0]
+	runtime.print_string(location.file_path)
+
+	if location.line > 0 {
+		when ODIN_ERROR_POS_STYLE == .Default {
+			runtime.print_string("(")
+			runtime.print_i64(i64(location.line))
+			if location.column > 0 {
 				runtime.print_string(":")
-				runtime.print_i64(i64(location.line))
-				if location.column > 0 {
-					runtime.print_string(":")
-					runtime.print_i64(i64(location.column))
-				}
-			} else {
-				#panic("unhandled ODIN_ERROR_POS_STYLE")
+				runtime.print_i64(i64(location.column))
 			}
+			runtime.print_string(")")
+		} else when ODIN_ERROR_POS_STYLE == .Unix {
+			runtime.print_string(":")
+			runtime.print_i64(i64(location.line))
+			if location.column > 0 {
+				runtime.print_string(":")
+				runtime.print_i64(i64(location.column))
+			}
+		} else {
+			#panic("unhandled ODIN_ERROR_POS_STYLE")
 		}
-		runtime.print_string(": ")
-		fmt.eprintfln("caught signal %q", cast(Signals)signal)
+	}
+	runtime.print_string(": ")
+	fmt.eprintfln("caught signal %q", cast(_Signals)signal)
 
-		if len(locations) == trace.BACKTRACE_SIZE - SKIP {
-			fmt.eprintln("For a larger backtrace, please set '-define:ODIN_TRACE_SIZE'")
-		}
-
-		trace.print(locations)
-		trace.locations_destroy(locations)
-
-		if thread.context_pool != nil {
-			thread.context_pool.should_die = true
-		}
-		os.exit(1)
+	if len(locations) == trace.BACKTRACE_SIZE - SKIP {
+		runtime.print_string("For a larger backtrace, please set '-define:ODIN_TRACE_SIZE'")
 	}
 
-	for signal in Signals {
-		libc.signal(cast(i32)signal, handler)
-	}
+	trace.print(locations)
+	trace.locations_destroy(locations)
 }
