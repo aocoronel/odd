@@ -23,6 +23,7 @@ TBD:
 - Experiment the library, to find more use cases that may change the implementation
 - Should Task_Proc really take a Task, or just the Task.data?
 - Maybe make the Task an union?
+- Array of context_pool?
 */
 
 IS_SUPPORTED :: thread.IS_SUPPORTED
@@ -371,7 +372,8 @@ Can be called from any thread.
 */
 errlock :: proc "contextless" () {
 	if context_pool != nil {
-		if sync.mutex_try_lock(&context_pool.err) do context_pool.should_die = true
+		sync.mutex_lock(&context_pool.err)
+		context_pool.should_die = true
 	}
 }
 
