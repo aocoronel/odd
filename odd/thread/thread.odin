@@ -166,7 +166,7 @@ Example: assuming 1 thread
   sum: int
   for i in next(&tasks, &work) {
     sum += i
-    if i == 99 do intrinsics.atomic_add(&work, 1)
+    if i == 99 do intrinsics.atomic_add_explicit(&work, 1, .Release)
   }
   assert(sum == 5050)
 */
@@ -357,10 +357,10 @@ Forcibly terminates all threads.
 
 May be called from the main thread, when pool.should_die is true.
 */
-terminate :: proc(pool: ^Pool, error_code := 1) {
+terminate :: proc(pool: ^Pool, exit_code := 1) {
 	if pool == nil do return
 	for t, i in pool.threads {
-		thread.terminate(t, error_code)
+		thread.terminate(t, exit_code)
 	}
 }
 
@@ -422,7 +422,7 @@ default_assertion_failure_proc :: proc(
 }
 
 /*
-Initializes the thread pool.
+Initializes the thread pool, with at least one thread
 
 "args" will be available to all threads from the context.
 
