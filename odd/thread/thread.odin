@@ -186,6 +186,7 @@ sema_post :: proc(sema: ^sync.Futex, pool: ^Pool, task: ^Task) -> runtime.Alloca
 	}
 
 	{
+		context.allocator = pool.threads[0].creation_allocator
 		sync.guard(&pool.mutex)
 		append(&pool.queue, task) or_return
 	}
