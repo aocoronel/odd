@@ -75,7 +75,7 @@ register_backtrace :: proc() {
 		if thread.context_pool != nil {
 			thread.context_pool.should_die = true
 		}
-		runtime.trap()
+		os.exit(1)
 	}
 
 	for signal in Signals {
