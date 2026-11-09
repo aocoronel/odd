@@ -41,7 +41,7 @@ Pool :: struct {
 	queue:         [dynamic]^Task,
 	threads:       []^thread.Thread,
 	// Lock queue interaction
-	mutex:         sync.Mutex,
+	queue_mutex:   sync.Mutex,
 	// Locks on thread failure
 	err:           sync.Mutex,
 	// Tasks to be done. It's atomic
@@ -177,24 +177,15 @@ next_dynamic :: #force_inline proc "contextless" (tasks: ^int, count: ^int) -> (
 }
 
 /*
-Wakes all threads up, and post a new task.
+Wakes all threads up
 */
 @(futex = .Wake)
-sema_post :: proc(sema: ^sync.Futex, pool: ^Pool, task: ^Task) -> runtime.Allocator_Error {
+sema_post :: proc "contextless" (sema: ^sync.Futex) {
 	when ODIN_VALGRIND_SUPPORT {
 		vg.helgrind_sem_post_pre(sema)
 	}
-
-	{
-		context.allocator = pool.threads[0].creation_allocator
-		sync.guard(&pool.mutex)
-		append(&pool.queue, task) or_return
-	}
-
 	intrinsics.atomic_add_explicit(sema, 1, .Release)
 	sync.futex_broadcast(sema)
-
-	return nil
 }
 
 /*
@@ -231,7 +222,7 @@ sema_wait :: proc(
 			}
 			last_generation^ = last_gen + 1
 			// Lock against queue reallocation
-			sync.guard(&pool.mutex)
+			sync.guard(&pool.queue_mutex)
 			return pool.queue[last_gen]
 		}
 
@@ -307,10 +298,18 @@ add_task :: proc(
 
 	intrinsics.atomic_add_explicit(&pool.tasks_pending, 1, .Relaxed)
 
-	if err = sema_post(&pool.sema, pool, task); err != nil {
+	{
+		context.allocator = pool.threads[0].creation_allocator
+		sync.guard(&pool.queue_mutex)
+		_, err = append(&pool.queue, task)
+	}
+
+	if err != nil {
 		free(task)
 		return nil, err
 	}
+
+	sema_post(&pool.sema)
 
 	return
 }
@@ -499,12 +498,11 @@ join :: proc(pool: ^Pool) -> bool {
 		thread.yield()
 	}
 
-	intrinsics.atomic_add(&pool.sema, 1)
-	sync.futex_broadcast(&pool.sema)
+	sema_post(&pool.sema)
 
 	thread.join_multiple(..pool.threads[:])
-
 	destroy(pool)
+
 	return true
 }
 
