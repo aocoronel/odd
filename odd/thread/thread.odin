@@ -453,8 +453,7 @@ init :: proc(
 ) {
 	thread_count := os.get_processor_core_count() if thread_count < 1 else thread_count
 
-	pool = auto_cast mem.malloc(size_of(Pool) + (size_of(^thread.Thread) * thread_count)) or_return
-	pool.threads = mem.shift(pool, ^thread.Thread, thread_count)
+	pool = create_pool(thread_count) or_return
 
 	// Create all threads first, because if any fails, no thread has
 	// yet started executing, avoid having to terminate them.
@@ -482,6 +481,26 @@ init :: proc(
 		thread.start(t)
 	}
 
+	return
+}
+
+/*
+Creates a pool that can have up to "thread_count" threads
+
+To free the pool, free() is enough
+*/
+create_pool :: proc(
+	thread_count: int,
+	allocator := context.allocator,
+) -> (
+	pool: ^Pool,
+	err: runtime.Allocator_Error,
+) {
+	pool = auto_cast mem.malloc(
+		size_of(Pool) + (size_of(^thread.Thread) * thread_count),
+		allocator,
+	) or_return
+	pool.threads = mem.shift(pool, ^thread.Thread, thread_count)
 	return
 }
 
