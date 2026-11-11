@@ -1,10 +1,9 @@
 package odd_thread_easy
 
 import "base:intrinsics"
-import "base:runtime"
+import rt "base:runtime"
 import "core:sync"
 import "core:thread"
-import "shared:odd/debug"
 import "shared:odd/mem"
 import odd_thread "shared:odd/thread"
 
@@ -16,9 +15,9 @@ as convenience, and as an example.
 Task_Proc :: proc(t: ^Task)
 
 Task :: struct {
-	data: []rawptr,
-	fn:   Task_Proc,
-	done: int,
+	data:      []rawptr,
+	procedure: Task_Proc,
+	done:      int,
 }
 
 /*
@@ -30,11 +29,11 @@ init :: proc(
 	thread_count: int = -1,
 	priority: thread.Thread_Priority = .Normal,
 	context_name: string = "thread",
-	runner: thread.Thread_Proc = _init,
+	runner: thread.Thread_Proc = runner,
 	pass_context := true,
 ) -> (
 	pool: ^odd_thread.Pool,
-	err: runtime.Allocator_Error,
+	err: rt.Allocator_Error,
 ) {
 	thread_count := odd_thread.select_thread_count(thread_count)
 
@@ -62,16 +61,23 @@ init :: proc(
 /*
 Thread runner.
 
-If the user has a custom assertion_failure_proc, don't forget to call broadcast_error()
+If the user has a custom assertion_failure_proc, don't forget to call broadcast_error(),
+then park()
 */
-_init :: proc(t: ^thread.Thread) {
+runner :: proc(t: ^thread.Thread) {
 	odd_thread.register_thread_backtrace()
 
-	pool := (cast(^odd_thread.Pool)t.data)
+	Pool :: odd_thread.Pool
+
+	pool := (cast(^Pool)t.data)
 
 	odd_thread.context_pool = pool
 	odd_thread.context_thread_count = len(pool.threads)
 	odd_thread.current_thread_id = t.user_index
+
+	if context.assertion_failure_proc == rt.default_assertion_failure_proc {
+		context.assertion_failure_proc = odd_thread.default_assertion_failure_proc
+	}
 
 	buffer: [1 << 8]rawptr // 2048 bytes
 
@@ -79,31 +85,54 @@ _init :: proc(t: ^thread.Thread) {
 	task_index: int
 
 	should_reset: bool
-	ring: [1 << 8]^Task // 2048 bytes
 
-	if context.assertion_failure_proc == runtime.default_assertion_failure_proc {
-		context.assertion_failure_proc = odd_thread.default_assertion_failure_proc
+	// TBD: maybe make the Task an union? Points to think about:
+	// - If the thread user_index is not relevant, let threads steal
+	// tasks from other threads
+	// - Optionally let the user procedure increment the done counter
+	// as it becomes a free cleanup marker
+	run :: proc(pool: ^Pool, task: ^Task) {
+		task.procedure(task)
+
+		done := intrinsics.atomic_add_explicit(&task.done, 1, .Relaxed) + 1
+		// Only last thread is allowed to decrease the counter
+		if done == odd_thread.context_thread_count {
+			intrinsics.atomic_sub_explicit(&pool.tasks_pending, 1, .Relaxed)
+			// Signal task done
+			intrinsics.atomic_store_explicit(&task.done, -1, .Relaxed)
+		}
 	}
 
 	die: for {
 		for {
-			// Wait until all threads are done
+			// Wait until all threads are done, or a thread failed
 			if pool.should_die ||
 			   pool.should_end && intrinsics.atomic_load(&pool.tasks_pending) == 0 {
 				break die
 			}
 
-			// Only runs on wait, where all threads finished the work
+			// Only runs on reset(), ideally after all threads finished the work
+			// This may break, depending on how the threads are used
 			if should_reset != pool.should_reset {
 				should_reset = !should_reset
 				task_index = 0
 				free_all(context.temp_allocator)
 			}
 
-			tasks_assigned := intrinsics.atomic_load_explicit(&pool.tasks_assigned, .Relaxed)
+			tasks_left :=
+				intrinsics.atomic_load_explicit(&pool.tasks_assigned, .Relaxed) - task_index
 
-			if task_index < tasks_assigned {
-				count := min(len(buffer), tasks_assigned - task_index)
+			if tasks_left == 1 {
+				// Skip slice copying, and slice iteration
+				// Lock against queue reallocation
+				sync.mutex_lock(&pool.queue_mutex)
+				task := pool.queue[task_index]
+				sync.mutex_unlock(&pool.queue_mutex)
+				task_index += 1
+				run(pool, cast(^Task)task)
+				continue
+			} else if tasks_left > 1 {
+				count := min(len(buffer), tasks_left)
 				// Lock against queue reallocation
 				sync.mutex_lock(&pool.queue_mutex)
 				copy_slice(buffer[:count], pool.queue[task_index:task_index + count])
@@ -119,15 +148,7 @@ _init :: proc(t: ^thread.Thread) {
 
 		for i in 0 ..< len(tasks) {
 			if pool.should_die do break die
-
-			task := cast(^Task)tasks[i]
-			task.fn(task)
-
-			done := intrinsics.atomic_add_explicit(&task.done, 1, .Relaxed) + 1
-			// Only last thread is allowed to decrease the counter
-			if done == odd_thread.context_thread_count {
-				intrinsics.atomic_sub_explicit(&pool.tasks_pending, 1, .Relaxed)
-			}
+			run(pool, cast(^Task)tasks[i])
 		}
 	}
 }
@@ -142,12 +163,12 @@ Can be called from any thread.
 */
 add_task :: proc(
 	pool: ^odd_thread.Pool,
-	fn: Task_Proc,
+	procedure: Task_Proc,
 	data: ..rawptr,
 	allocator := context.temp_allocator,
 ) -> (
 	task: ^Task,
-	err: runtime.Allocator_Error,
+	err: rt.Allocator_Error,
 ) #optional_allocator_error {
 	if pool == nil do return
 
@@ -158,7 +179,7 @@ add_task :: proc(
 
 	for d, i in data do args[i] = d
 
-	task.fn = fn
+	task.procedure = procedure
 	task.data = args
 
 	intrinsics.atomic_add_explicit(&pool.tasks_pending, 1, .Relaxed)
@@ -197,7 +218,7 @@ wait_task :: proc(pool: ^odd_thread.Pool, tasks: ..^Task) {
 		for {
 			intrinsics.cpu_relax()
 			thread.yield()
-			if task.done == len(pool.threads) {
+			if task.done == -1 {
 				break
 			}
 		}
