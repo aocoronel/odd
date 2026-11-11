@@ -9,7 +9,7 @@ _indent :: #force_inline proc(i: int, file: ^os.File) -> (pos: int) {
 	buff: [32]u8
 	for i in 0 ..< 32 do buff[i] = ' '
 	print(file, string(buff[:i]))
-	return i
+	return min(i, 32)
 }
 
 /*
