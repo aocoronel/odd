@@ -1,7 +1,7 @@
 package odd_thread
 
 import "base:intrinsics"
-import "base:runtime"
+import rt "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:sync"
@@ -172,7 +172,7 @@ init :: proc(
 		threads[i] = t
 	}
 
-	_context: Maybe(runtime.Context) = context if pass_context else nil
+	_context: Maybe(rt.Context) = context if pass_context else nil
 
 	for i in 0 ..< len(threads) {
 		t := threads[i]
@@ -187,24 +187,24 @@ init :: proc(
 }
 
 /*
-Odin's runtime.default_assertion_failure_contextless_proc, but
+Odin's rt.default_assertion_failure_contextless_proc, but
 without the ending trap()
 */
 default_assertion_failure_contextless_proc :: proc "contextless" (
 	prefix, message: string,
-	loc: runtime.Source_Code_Location,
+	loc: rt.Source_Code_Location,
 ) {
 	when ODIN_OS == .Freestanding {
 		// Do nothing
 	} else {
 		when ODIN_OS != .Orca && !ODIN_DISABLE_ASSERT {
-			runtime.print_caller_location(loc)
-			runtime.print_string(" ")
+			rt.print_caller_location(loc)
+			rt.print_string(" ")
 		}
-		runtime.print_string(prefix)
+		rt.print_string(prefix)
 		if len(message) > 0 {
-			runtime.print_string(": ")
-			runtime.print_string(message)
+			rt.print_string(": ")
+			rt.print_string(message)
 		}
 
 		when ODIN_OS == .Orca {
@@ -216,10 +216,10 @@ default_assertion_failure_contextless_proc :: proc "contextless" (
 				cstring(raw_data(orca_stderr_buffer[:orca_stderr_buffer_idx])),
 			)
 		} else {
-			runtime.print_byte('\n')
+			rt.print_byte('\n')
 		}
 	}
-	when runtime.ODIN_CODEPAGE_MAGIC {
+	when rt.ODIN_CODEPAGE_MAGIC {
 		SetConsoleOutputCP(old_console_codepage)
 	}
 }

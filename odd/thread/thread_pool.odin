@@ -1,7 +1,7 @@
 package odd_thread
 
 import "base:intrinsics"
-import "base:runtime"
+import rt "base:runtime"
 import "core:c"
 import "core:c/libc"
 import "core:sync"
@@ -125,7 +125,7 @@ Do not set this in the main thread's context.
 */
 default_assertion_failure_proc :: proc(
 	prefix, message: string,
-	loc: runtime.Source_Code_Location,
+	loc: rt.Source_Code_Location,
 ) -> ! {
 	if !broadcast_error() {
 		parker: sync.Parker
@@ -134,7 +134,7 @@ default_assertion_failure_proc :: proc(
 	default_assertion_failure_contextless_proc(prefix, message, loc)
 	parker: sync.Parker
 	sync.park(&parker)
-	runtime.trap()
+	rt.trap()
 }
 
 /*
@@ -147,7 +147,7 @@ create_pool :: proc(
 	allocator := context.allocator,
 ) -> (
 	pool: ^Pool,
-	err: runtime.Allocator_Error,
+	err: rt.Allocator_Error,
 ) {
 	pool = auto_cast mem.malloc(
 		size_of(Pool) + (size_of(^thread.Thread) * thread_count),
