@@ -43,7 +43,15 @@ init :: proc(
 		free(pool)
 	}
 
-	ok := odd_thread.init(&pool.threads, pool, runner, args, priority, context_name, pass_context)
+	ok := #force_inline odd_thread.init(
+		&pool.threads,
+		pool,
+		runner,
+		args,
+		priority,
+		context_name,
+		pass_context,
+	)
 	if !ok {
 		err = .Out_Of_Memory
 	}
@@ -57,7 +65,7 @@ Thread runner.
 If the user has a custom assertion_failure_proc, don't forget to call broadcast_error()
 */
 _init :: proc(t: ^thread.Thread) {
-	debug.register_thread_backtrace()
+	odd_thread.register_thread_backtrace()
 
 	pool := (cast(^odd_thread.Pool)t.data)
 
