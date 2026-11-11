@@ -2,12 +2,11 @@ package odd_thread
 
 import "base:intrinsics"
 import rt "base:runtime"
-import "core:c"
-import "core:c/libc"
+import "core:mem"
+import "core:mem/virtual"
+import "core:os"
 import "core:sync"
 import "core:thread"
-import "shared:odd/debug"
-import "shared:odd/mem"
 
 /*
 Notes:
@@ -21,47 +20,94 @@ you will still find useful procedures at ./helpers.odin
 */
 
 Pool :: struct {
-	// Won't shrink, but memory is reused
-	queue:                         [dynamic]rawptr,
-	threads:                       []^thread.Thread,
+	// Virtual memory
+	queue:            []rawptr,
 	// Lock queue interaction
-	queue_mutex:                   sync.Mutex,
-	// Tasks to be done. It's atomic
-	tasks_assigned, tasks_pending: int,
+	threads:          []^thread.Thread,
+	len:              int,
+	// Commands to be done. It's atomic
+	commands_pending: int,
+	queue_mutex:      sync.Mutex,
 	// Broadcasts to all threads. It's atomic
-	sema:                          sync.Futex,
+	sema:             sync.Futex,
 	// Signals threads to clear their memory
-	should_reset:                  bool,
-	// A thread has an error
-	should_die:                    bool,
+	should_reset:     bool,
 	// Signal threads to gracefully stop after
-	// completing all remaining tasks
-	should_end:                    bool,
+	// completing all remaining commands
+	should_end:       bool,
 }
 
+Config :: struct {
+	args:         [thread.MAX_USER_ARGUMENTS]rawptr,
+	context_name: string,
+	thread_count: int,
+	priority:     thread.Thread_Priority,
+	pass_context: bool,
+}
+
+DEFAULT_CONFIG :: Config {
+	args         = nil,
+	thread_count = -1,
+	priority     = .Normal,
+	context_name = "thread",
+	pass_context = true,
+}
+
+/*
+Waits until all threads finished all commands.
+
+This will also clear the queue and temp_allocator from all threads.
+
+When return "false", a thread failed. You may call terminate(), then destroy()
+*/
 wait :: proc {
 	wait_single,
 	wait_multiple,
 }
 
-reset :: proc {
-	reset_single,
-	reset_multiple,
-}
+/*
+Joins all threads created by init.
 
+When return "false", a thread failed. You may call terminate(), then destroy()
+When return "true", you may call destroy()
+*/
 join :: proc {
 	join_single,
 	join_multiple,
 }
 
+/*
+Forcibly terminates all threads.
+
+May be called from the main thread, when pool.should_die is true.
+*/
 terminate :: proc {
 	terminate_single,
 	terminate_multiple,
 }
 
+/*
+Frees pool and thread memory.
+*/
 destroy :: proc {
 	destroy_single,
 	destroy_multiple,
+}
+
+/*
+Appends a command to the queue, also posts it to other threads.
+*/
+submit :: proc(pool: ^Pool, elem: rawptr) -> rt.Allocator_Error {
+	context.allocator = pool.threads[0].creation_allocator
+	{
+		sync.guard(&pool.queue_mutex)
+		if pool.len > len(pool.queue) do return .Out_Of_Memory
+		pool.queue[pool.len] = elem
+		pool.len += 1
+	}
+	intrinsics.atomic_add_explicit(&pool.commands_pending, 1, .Release)
+	sema_post(&pool.sema)
+	return nil
 }
 
 /*
@@ -74,50 +120,6 @@ get_context_pool :: #force_inline proc "contextless" () -> ^Pool {
 }
 
 /*
-Broadcast that a thread has an error. This should only be called in
-an irrecoverable error.
-
-Only use inside a thread.
-
-Example:
-
-  file, err := open("file.txt")
-  if err != nil {
-    log.error(err)
-    broadcast_error()
-    return
-  }
-*/
-broadcast_error :: #force_inline proc "contextless" () -> bool {
-	return !intrinsics.atomic_exchange_explicit(&get_context_pool().should_die, true, .Relaxed)
-}
-
-/*
-Register a signal handler to capture the backtrace of the program,
-only inside of a thread.
-
-The backtrace size can be customized with -define:ODIN_TRACE_SIZE.
-
-The backtrace supports both .Odin and .Unix styles.
-*/
-register_thread_backtrace :: proc() {
-	when ODIN_DEBUG {
-		for signal in debug.Signals {
-			libc.signal(cast(i32)signal, _thread_handler)
-		}
-	}
-}
-
-_thread_handler :: proc "cdecl" (signal: c.int) {
-	if broadcast_error() {
-		debug.print_backtrace(signal)
-	}
-
-	parker: sync.Parker
-	sync.park(&parker) // park forever
-}
-
-/*
 Procedures like ensure, panic and unimplemented will use this,
 but procedures like os.exit, won't. Call broadcast_error() before the the former
 
@@ -127,182 +129,90 @@ default_assertion_failure_proc :: proc(
 	prefix, message: string,
 	loc: rt.Source_Code_Location,
 ) -> ! {
-	if !broadcast_error() {
-		parker: sync.Parker
-		sync.park(&parker)
-	}
 	default_assertion_failure_contextless_proc(prefix, message, loc)
-	parker: sync.Parker
-	sync.park(&parker)
-	rt.trap()
+	os.exit(1)
 }
 
 /*
 Creates a pool that can have up to "thread_count" threads
 
-To free the pool, free() is enough
+To cleanup, use destroy()
 */
+@(require_results)
 create_pool :: proc(
-	thread_count: int,
+	thread_count: int = -1,
+	reserve: uint = mem.Gigabyte when size_of(uintptr) == 8 else 128 * mem.Megabyte,
 	allocator := context.allocator,
 ) -> (
 	pool: ^Pool,
 	err: rt.Allocator_Error,
 ) {
-	pool = auto_cast mem.malloc(
-		size_of(Pool) + (size_of(^thread.Thread) * thread_count),
-		allocator,
-	) or_return
-	pool.threads = mem.shift(pool, ^thread.Thread, thread_count)
+	context.temp_allocator = allocator
+	count := select_thread_count(thread_count)
+	pool = new(Pool) or_return
+	defer if err != nil do free(pool)
+	pool.threads = make([]^thread.Thread, count) or_return
+	defer if err != nil do delete(pool.threads)
+	memory := virtual.reserve_and_commit(reserve) or_return
+	pool.queue = transmute([]rawptr)memory[:reserve / size_of(rawptr)]
 	return
 }
 
-/*
-Waits until all threads finished all tasks.
-
-Can be used from any thread.
-
-When return "false", a thread failed. You may call terminate(), then destroy()
-*/
-wait_single :: proc(pool: ^Pool) -> bool {
+wait_single :: proc(pool: ^Pool) {
 	for {
-		if intrinsics.atomic_load_explicit(&pool.tasks_pending, .Relaxed) == 0 do break
-		if pool.should_die do return false
+		if intrinsics.atomic_load_explicit(&pool.commands_pending, .Relaxed) == 0 do break
 		intrinsics.cpu_relax()
 		thread.yield()
 	}
-
-	return true
 }
 
-/*
-Waits until all threads finished all tasks.
-
-Can be used from any thread.
-
-Respects pool order.
-
-When return "false", a thread failed. You may call terminate(), then destroy()
-*/
-wait_multiple :: proc(pools: ..^Pool) -> bool {
-	for pool in pools do wait(pool) or_return
-	return true
+wait_multiple :: proc(pools: ..^Pool) {
+	for pool in pools do wait(pool)
 }
 
 /*
 Clears the queue and temp_allocator from all threads.
 */
-reset_single :: proc(pool: ^Pool) {
+reset :: proc(pool: ^Pool) {
 	pool.should_reset = !pool.should_reset
-	pool.tasks_assigned = 0
-	clear(&pool.queue)
+	pool.len = 0
 }
 
-/*
-Clears the queue and temp_allocator from all threads in all pools from all pools.
-
-Respects pool order.
-*/
-reset_multiple :: proc(pools: ..^Pool) {
-	for pool in pools do reset_single(pool)
-}
-
-/*
-Waits until all threads finished all tasks.
-
-This will also clear the queue and temp_allocator from all threads.
-
-When return "false", a thread failed. You may call terminate(), then destroy()
-*/
-wait_and_reset :: proc(pool: ^Pool) -> bool {
-	wait(pool) or_return
-	reset(pool)
-	return true
-}
-
-/*
-Waits until all threads finished all tasks from all pools.
-
-This will also clear the queue and temp_allocator from all threads.
-
-Respects pool order.
-
-When return "false", a thread failed. You may call terminate(), then destroy()
-*/
-wait_and_reset_multiple :: proc(pools: ..^Pool) -> bool {
-	wait(..pools) or_return
-	reset(..pools)
-	return true
-}
-
-/*
-Joins all threads created by init, and frees their memory.
-
-When return "false", a thread failed. You may call terminate(), then destroy()
-*/
-join_single :: proc(pool: ^Pool) -> bool {
+join_single :: proc(pool: ^Pool) {
 	pool.should_end = true
 
-	wait(pool) or_return
+	wait(pool)
 
 	sema_post(&pool.sema)
 
 	thread.join_multiple(..pool.threads[:])
-	destroy(pool)
-
-	return true
 }
 
-/*
-Joins all threads created by init, and frees their memory.
-
-Respects pool order.
-
-When return "false", a thread failed. You may call terminate(), then destroy()
-*/
-join_multiple :: proc(pools: ..^Pool) -> bool {
+join_multiple :: proc(pools: ..^Pool) {
 	for pool in pools do join_single(pool)
-	return true
 }
 
-/*
-Forcibly terminates all threads.
-
-May be called from the main thread, when pool.should_die is true.
-*/
 terminate_single :: proc(pool: ^Pool, exit_code := 1) {
-	for t, i in pool.threads {
+	for t in pool.threads {
 		thread.terminate(t, exit_code)
 	}
 }
 
-/*
-Forcibly terminates all threads from all pools.
-
-Respects pool order.
-
-May be called from the main thread, when pool.should_die is true.
-*/
 terminate_multiple :: proc(pools: ..^Pool, exit_code := 1) {
 	for pool in pools {
 		terminate_single(pool, exit_code)
 	}
 }
 
-/*
-Frees pool and thread memory.
-*/
 destroy_single :: proc(pool: ^Pool) {
+	if pool == nil do return
 	context.allocator = pool.threads[0].creation_allocator
 	for t in pool.threads do free(t)
+	virtual.release(raw_data(pool.queue), len(pool.queue))
+	delete(pool.threads)
 	free(pool)
 }
 
-/*
-Frees pool and thread memory from all pools.
-
-Respects pool order.
-*/
 destroy_multiple :: proc(pools: ..^Pool) {
 	for pool in pools {
 		destroy_single(pool)

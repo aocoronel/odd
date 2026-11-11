@@ -55,8 +55,8 @@ peek :: proc(s: ^Tokenizer) -> (Token, int) {
 		pos := pos
 		size: int
 		for i in pos ..< len(s.buff) {
-			c := cast(rune)s.buff[i]
-			if !is(c) {
+			r := cast(rune)s.buff[i]
+			if !is(r) {
 				break
 			}
 			size += 1

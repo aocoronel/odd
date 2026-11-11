@@ -12,4 +12,4 @@ package odd
 @(require) import "terminal/spinner"
 @(require) import "thread"
 
-main :: proc() {}
+main :: proc() {  }

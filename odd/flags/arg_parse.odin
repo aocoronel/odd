@@ -4,9 +4,9 @@ import "base:runtime"
 import "core:strings"
 
 optind: int = 1 // current option index (skip program)
-optopt: string // current option
-optarg: string // current argument
-optval: string // -flag value
+optopt: string  // current option
+optarg: string  // current argument
+optval: string  // -flag value
 
 when ODIN_OS == .Windows {
 	args__ := runtime.args__.([]cstring16)

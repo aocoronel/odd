@@ -11,8 +11,6 @@ import "core:thread"
 Range :: #type [2]int
 
 @(thread_local)
-current_thread_id: int
-@(thread_local)
 context_thread_count: int
 @(thread_local)
 context_pool: rawptr
@@ -25,6 +23,7 @@ next :: proc {
 /*
 Selects at least one thread. Defaults to CPU count.
 */
+@(require_results)
 select_thread_count :: proc(thread_count: int = -1) -> int {
 	return os.get_processor_core_count() if thread_count < 1 else thread_count
 }
@@ -48,8 +47,9 @@ Example: assuming 1 thread
   }
   assert(sum == 5050)
 */
-range :: proc "contextless" (count: int) -> Range {
-	id, thread_count := current_thread_id, context_thread_count
+@(require_results)
+range :: proc "contextless" (thread_idx: int, count: int) -> Range {
+	id, thread_count := thread_idx, context_thread_count
 	per_thread, leftover := count / thread_count, count % thread_count
 	extra := int(id < leftover)
 	begin := per_thread * id + min(id, leftover)
@@ -74,9 +74,9 @@ Example: assuming 1 thread
   }
   assert(sum == 5050)
 */
-@(synchronizes = .Seq_Cst)
-next_static :: #force_inline proc "contextless" (tasks: ^int, count: int) -> (int, bool) {
-	idx := intrinsics.atomic_add(tasks, 1)
+@(require_results)
+next_static :: #force_inline proc "contextless" (tasks: ^$T, count: T) -> (T, bool) {
+	idx := intrinsics.atomic_add_explicit(tasks, 1, .Relaxed)
 	return idx, idx < count
 }
 
@@ -100,8 +100,9 @@ Example: assuming 1 thread
   }
   assert(sum == 5050)
 */
+@(require_results)
 @(synchronizes = .Acquire)
-next_dynamic :: #force_inline proc "contextless" (tasks: ^int, count: ^int) -> (int, bool) {
+next_dynamic :: #force_inline proc "contextless" (tasks: ^$T, count: ^T) -> (T, bool) {
 	idx := intrinsics.atomic_add(tasks, 1)
 	return idx, idx < intrinsics.atomic_load_explicit(count, .Acquire)
 }
@@ -150,10 +151,7 @@ init :: proc(
 	threads: ^[]^thread.Thread,
 	data: rawptr,
 	runner: thread.Thread_Proc,
-	args: [thread.MAX_USER_ARGUMENTS]rawptr = nil,
-	priority: thread.Thread_Priority = .Normal,
-	context_name: string = "thread",
-	pass_context := true,
+	config := DEFAULT_CONFIG,
 ) -> (
 	ok: bool,
 ) {
@@ -161,7 +159,7 @@ init :: proc(
 	// yet started executing, avoid having to terminate them.
 	for i in 0 ..< len(threads) {
 		// create() uses context.allocator
-		t := thread.create(runner, priority, fmt.tprintf("%s-%d", context_name, i))
+		t := thread.create(runner, config.priority, fmt.tprintf("%s-%d", config.context_name, i))
 		if t == nil {
 			// EINVAL, EPERM, EAGAIN
 			for j in 0 ..< i {
@@ -172,13 +170,13 @@ init :: proc(
 		threads[i] = t
 	}
 
-	_context: Maybe(rt.Context) = context if pass_context else nil
+	_context: Maybe(rt.Context) = context if config.pass_context else nil
 
 	for i in 0 ..< len(threads) {
 		t := threads[i]
 		t.data = data
 		t.user_index = i
-		t.user_args = args
+		t.user_args = config.args
 		t.init_context = _context
 		thread.start(t)
 	}

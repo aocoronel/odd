@@ -1,95 +1,125 @@
 package odd_mem
 
 import "base:runtime"
+import "core:mem"
 
-/*
-Warning: this procedure is very odd to be in Odin. Here be dragons.
+shift_bytes_unaligned :: #force_inline proc "contextless" (ptr: rawptr, size: int) -> rawptr {
+	return rawptr(uintptr(ptr) + uintptr(size))
+}
 
-Example:
+allocate_types :: proc {
+	allocate_types2,
+	allocate_types3,
+	allocate_types4,
+}
 
-	state = auto_cast mem.malloc(
-			size_of(State) +
-			size_of(sync.Barrier) +
-			(size_of(^thread.Thread) * thread_count)) or_return
-
-	state.barrier = mem.shift(state, sync.Barrier)
-	state.threads = mem.shift(state.barrier, ^thread.Thread, thread_count)
-
-The example above is a real one from odd/thread.
-And it's doing a very useful task.
-
-Many times we need to allocate like:
-
-  var1 := new(int) or_return
-  defer free(var1)
-  var2 := new(int) or_return
-  defer free(var2)
-
-If this was C, they would complain the language lacks "defer".
-However, paying "defer" here means having two allocation calls,
-but they make part of the same context window! The example allocates
-three variables under a single pointer and from a single allocation,
-and can be later freed with a single:
-
-  free(state)
-
-Essentially a lightweight arena.
-
-I thought it would be useful to comment on it, since I learned it by
-writing C, and I never really saw anyone doing this before.
-*/
-malloc :: #force_inline proc(
-	#any_int size: int,
+allocate_types2 :: #force_inline proc(
+	$T1, $T2: typeid,
 	allocator := context.allocator,
 	loc := #caller_location,
 ) -> (
-	ptr: rawptr,
+	p1: ^T1,
+	p2: ^T2,
 	err: runtime.Allocator_Error,
-) #optional_allocator_error {
+) {
+	align1 :: align_of(T1)
+	align2 :: align_of(T2)
+	max_align := max(align1, align2)
+
+	off1 :: 0
+	off2 := mem.align_formula(off1 + size_of(T1), align2)
+	total := off2 + size_of(T2)
+
 	data := allocator.procedure(
 		allocator.data,
 		.Alloc,
-		size,
-		align_of(u8),
+		total,
+		max_align,
 		nil,
 		0,
 		location = loc,
 	) or_return
-	return raw_data(data), nil
+
+	base := uintptr(raw_data(data))
+	p1 = cast(^T1)rawptr(base + uintptr(off1))
+	p2 = cast(^T2)rawptr(base + uintptr(off2))
+	return
 }
 
-shift :: proc {
-	shift_bytes,
-	shift_type,
-	shift_slice,
-	shift_from_slice_to_type,
-	shift_from_slice_to_slice,
+allocate_types3 :: #force_inline proc(
+	$T1, $T2, $T3: typeid,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> (
+	p1: ^T1,
+	p2: ^T2,
+	p3: ^T3,
+	err: runtime.Allocator_Error,
+) {
+	align1 :: align_of(T1)
+	align2 :: align_of(T2)
+	align3 :: align_of(T3)
+	max_align := max(align1, align2, align3)
+
+	off1 :: 0
+	off2 := mem.align_formula(off1 + size_of(T1), align2)
+	off3 := mem.align_formula(off2 + size_of(T2), align3)
+	total := off3 + size_of(T3)
+
+	data := allocator.procedure(
+		allocator.data,
+		.Alloc,
+		total,
+		max_align,
+		nil,
+		0,
+		location = loc,
+	) or_return
+
+	base := uintptr(raw_data(data))
+	p1 = cast(^T1)rawptr(base + uintptr(off1))
+	p2 = cast(^T2)rawptr(base + uintptr(off2))
+	p3 = cast(^T3)rawptr(base + uintptr(off3))
+	return
 }
 
-shift_bytes :: #force_inline proc "contextless" (ptr: rawptr, size: int) -> rawptr {
-	return rawptr(uintptr(ptr) + uintptr(size))
-}
+allocate_types4 :: #force_inline proc(
+	$T1, $T2, $T3, $T4: typeid,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> (
+	p1: ^T1,
+	p2: ^T2,
+	p3: ^T3,
+	p4: ^T4,
+	err: runtime.Allocator_Error,
+) {
+	align1 :: align_of(T1)
+	align2 :: align_of(T2)
+	align3 :: align_of(T3)
+	align4 :: align_of(T4)
+	max_align := max(align1, align2, align3, align4)
 
-shift_type :: #force_inline proc "contextless" (ptr: ^$T, $O: typeid) -> ^O {
-	return cast(^O)rawptr(uintptr(ptr) + uintptr(size_of(T)))
-}
+	off1 :: 0
+	off2 := mem.align_formula(off1 + size_of(T1), align2)
+	off3 := mem.align_formula(off2 + size_of(T2), align3)
+	off4 := mem.align_formula(off3 + size_of(T3), align4)
+	total := off4 + size_of(T4)
 
-shift_slice :: #force_inline proc "contextless" (
-	ptr: ^$T,
-	$O: typeid,
-	length: int,
-) -> []O #no_bounds_check {
-	return (cast([^]O)rawptr(uintptr(ptr) + uintptr(size_of(T))))[:length]
-}
+	data := allocator.procedure(
+		allocator.data,
+		.Alloc,
+		total,
+		max_align,
+		nil,
+		0,
+		location = loc,
+	) or_return
 
-shift_from_slice_to_type :: #force_inline proc "contextless" (ptr: []$T, $O: typeid) -> ^O {
-	return cast(^O)rawptr(uintptr(raw_data(ptr)) + uintptr(size_of(T) * len(ptr)))
-}
-
-shift_from_slice_to_slice :: #force_inline proc "contextless" (
-	ptr: []$T,
-	$O: typeid,
-	length: int,
-) -> []O #no_bounds_check {
-	return (cast([^]O)rawptr(uintptr(raw_data(ptr)) + uintptr(size_of(T) * len(ptr))))[:length]
+	base := uintptr(raw_data(data))
+	p1 = cast(^T1)rawptr(base + uintptr(off1))
+	p2 = cast(^T2)rawptr(base + uintptr(off2))
+	p3 = cast(^T3)rawptr(base + uintptr(off3))
+	p4 = cast(^T4)rawptr(base + uintptr(off4))
+	return
 }

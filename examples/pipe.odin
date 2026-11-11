@@ -1,7 +1,6 @@
 #+feature using-stmt
 
 package example
-
 import "core:fmt"
 import "core:log"
 import "core:mem"

@@ -74,7 +74,7 @@ _test :: proc(_: ^T) {
 
 	m, _ := init(flags)
 	defer delete(m)
-
+	
     // odinfmt: disable
 	args__ = {
         nil, // program name
@@ -140,7 +140,7 @@ _test :: proc(_: ^T) {
 	assert(bitsets_enum == {})
 	assert(bitsets_rune == {})
 	assert(bitsets_integer == {})
-
+	
     // odinfmt: disable
 	args__ = {
         nil, // program name

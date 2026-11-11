@@ -5,11 +5,11 @@ import "core:os"
 
 print :: fmt.fprint
 
-_indent :: #force_inline proc(i: int, file: ^os.File) -> (pos: int) {
+_indent :: #force_inline proc(indent: int, file: ^os.File) -> (pos: int) {
 	buff: [32]u8
 	for i in 0 ..< 32 do buff[i] = ' '
-	print(file, string(buff[:i]))
-	return min(i, 32)
+	print(file, string(buff[:min(indent, 32)]))
+	return min(indent, 32)
 }
 
 /*

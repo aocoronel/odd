@@ -1,4 +1,6 @@
 package odd_debug
+import "core:sync"
+import "core:thread"
 
 import rt "base:runtime"
 import "core:c"
@@ -47,6 +49,8 @@ _handler :: proc "cdecl" (signal: c.int) {
 }
 
 print_backtrace :: proc "cdecl" (signal: c.int) {
+	@(static) mutex: sync.Mutex
+	sync.guard(&mutex)
 	SKIP :: 3
 	context = rt.default_context()
 	capture := trace.capture(SKIP) // 3 skip the signal handler stack trace
@@ -55,6 +59,15 @@ print_backtrace :: proc "cdecl" (signal: c.int) {
 		rt.print_string("trace error: ")
 		rt.print_string(trace.resolve_err_string(err))
 		rt.print_byte('\n')
+		return
+	}
+	if len(locations) == 0 {
+		rt.print_string("caught signal in ")
+		rt.print_string(thread.get_name() or_else "unnamed")
+		rt.print_string(": ")
+		rt.print_string(signals_name[cast(Signals)signal])
+		rt.print_byte('\n')
+		rt.print_string("   No backtrace available")
 		return
 	}
 	location := locations[0]
@@ -81,7 +94,9 @@ print_backtrace :: proc "cdecl" (signal: c.int) {
 		}
 	}
 	rt.print_string(": ")
-	rt.print_string("caught signal: ")
+	rt.print_string("caught signal in ")
+	rt.print_string(thread.get_name() or_else "unnamed")
+	rt.print_string(": ")
 	rt.print_string(signals_name[cast(Signals)signal])
 	rt.print_byte('\n')
 
