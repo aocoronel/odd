@@ -2,8 +2,11 @@ package odd_thread
 
 import "base:intrinsics"
 import "base:runtime"
+import "core:c"
+import "core:c/libc"
 import "core:sync"
 import "core:thread"
+import "shared:odd/debug"
 import "shared:odd/mem"
 
 /*
@@ -87,6 +90,31 @@ Example:
 */
 broadcast_error :: #force_inline proc "contextless" () -> bool {
 	return !intrinsics.atomic_exchange_explicit(&get_context_pool().should_die, true, .Relaxed)
+}
+
+/*
+Register a signal handler to capture the backtrace of the program,
+only inside of a thread.
+
+The backtrace size can be customized with -define:ODIN_TRACE_SIZE.
+
+The backtrace supports both .Odin and .Unix styles.
+*/
+register_thread_backtrace :: proc() {
+	when ODIN_DEBUG {
+		for signal in debug.Signals {
+			libc.signal(cast(i32)signal, _thread_handler)
+		}
+	}
+}
+
+_thread_handler :: proc "cdecl" (signal: c.int) {
+	if broadcast_error() {
+		debug.print_backtrace(signal)
+	}
+
+	parker: sync.Parker
+	sync.park(&parker) // park forever
 }
 
 /*
