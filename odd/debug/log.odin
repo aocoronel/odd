@@ -8,7 +8,7 @@ when ODIN_DEBUG {
 	LOGGER_OPT :: log.Options{.Level, .Terminal_Color}
 }
 
-short_level_header :: #force_inline proc() {
+lowercase_level_headers :: #force_inline proc "contextless" () {
 	log.Level_Headers = {
 		0 ..< 10 = "debug: ",
 		10 ..< 20 = "info: ",
