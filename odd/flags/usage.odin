@@ -173,7 +173,7 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 		print_var(i.elem, overwrite, file)
 		print(file, ']')
 		print(file, "..")
-		fmt.fprintf(file, " +%d", i.capacity - 1)
+		fmt.fprintf(file, " up to %d", i.capacity)
 	case Type_Info_Enumerated_Array:
 		print(file, '[')
 		if has_overwrite {
@@ -190,7 +190,7 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 		}
 		print(file, ']')
 		print(file, "..")
-		fmt.fprintf(file, " +%d", i.count - 1)
+		fmt.fprintf(file, " up to %d", i.count)
 	case Type_Info_Enum: if has_overwrite {
 				print(file, overwrite)
 			} else {
@@ -239,7 +239,7 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 		}
 		print(file, ']')
 		print(file, "..")
-		fmt.fprintf(file, " +%d", backing_size - 1)
+		fmt.fprintf(file, " up to %d", backing_size)
 	case Type_Info_Bit_Field,
 	     Type_Info_Type_Id,
 	     Type_Info_Matrix,
