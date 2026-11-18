@@ -175,10 +175,9 @@ Uses most of what the library can do.
               // infrastructure to parse commands
   			for c, i in cmd {
   				if c.name == optopt {
-  					call(cmd, cast(u32)i + 1, false)
+  					call(cmd, cast(u32)i, false)
   				}
   			}
-  		// positional arguments
   		case .Error:
   			has_err = true
   		}
@@ -190,18 +189,17 @@ Uses most of what the library can do.
 Generated usage message for this example. The description is written using ~term.iprint_str~, which allows strings to contain newlines, without actually inserting them, unless there are two in sequence, for the sake of wrapping them in the code. ~term.iprint_str~ also prints the description until the maximum width of the tty, gracefully wrapping to the next line following up the indentation.
 
 #+BEGIN_SRC text
-Options:
   debug
       Enable debugging info
-  files:[text].. +3
+  files:[text].. up to 4
       Parse files
   io:FILE.. +1
-      Source file and destinat
+      Source file and destination
   ok_level:(Ok,Maybe_Ok,Not_Ok)
       How ok are you?
-  ok_level_string:[(Ok,Maybe_Ok,Not_Ok)=text].. +2
+  ok_level_string:[(Ok,Maybe_Ok,Not_Ok)=text].. up to 3
       Explain how ok are you
-  priority:[A..=Z].. +31
+  priority:[A..=Z].. up to 32
       Priority level
   square:height width posx posy
       A very long help message in case it is needed for some reason
