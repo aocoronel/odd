@@ -141,7 +141,7 @@ parse :: proc(m: map[string]u32, opt: []Option) -> (err: Result) {
 	return .Ok
 }
 
-call :: proc(opt: []Option, entry: u32, ignore: bool) -> bool {
+call :: proc(opt: []Option, entry: u32, ignore := false) -> bool {
 	idx := entry - 1
 	fn := opt[idx].fn
 	var := opt[idx].var
