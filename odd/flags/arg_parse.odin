@@ -3,6 +3,8 @@ package odd_flags
 import "base:runtime"
 import "core:strings"
 
+STRICT_RTTI :: #config(ODD_FLAGS_STRICT_RTTI, false)
+
 optind: int = 1 // current option index (skip program)
 optopt: string  // current option
 optarg: string  // current argument
@@ -191,8 +193,7 @@ init :: proc(opts: []Option) -> (m: map[string]u32, ok: bool) {
 
 		m[long] = cast(u32)i + 1
 
-		// TBD: define NO_RTTI
-		when false {
+		when STRICT_RTTI {
 			if opt.fn == nil {
 				errorf("%s: flag doesn't have a set function.", long)
 				ok = false
