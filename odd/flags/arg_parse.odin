@@ -1,6 +1,7 @@
 package odd_flags
 
 import "base:runtime"
+import "core:log"
 import "core:strings"
 
 STRICT_RTTI :: #config(ODD_FLAGS_STRICT_RTTI, false)
@@ -186,11 +187,25 @@ init :: proc(opts: []Option) -> (m: map[string]u32, ok: bool) {
 
 		if len(opt.name) > 2 && opt.name[1] == ',' {
 			long = opt.name[2:]
+			when ODIN_DEBUG {
+				if shortopt_lut[opt.name[0]] != 0 {
+					log.warnf(
+						"%s: flag was already set, and it's overwritting %q",
+						opt.name[0],
+						opts[shortopt_lut[opt.name[0]]].name,
+					)
+				}
+			}
 			shortopt_lut[opt.name[0]] = cast(u32)i + 1
 		} else {
 			long = opt.name[:]
 		}
 
+		when ODIN_DEBUG {
+			if m[long] != 0 {
+				log.warnf("%s: flag was already set, and it's overwritting %q", opt.name[0], long)
+			}
+		}
 		m[long] = cast(u32)i + 1
 
 		when STRICT_RTTI {
