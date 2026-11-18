@@ -53,7 +53,7 @@ main :: proc() {
 			in case it is needed for some reason`,
 		},
 		// You can set the "fn" field, to skip most RTTI
-		{name = "debug", var = &opts.debug, fn = get_bool, help = `Enable debugging info`},
+		{name = "debug", var = &opts.debug, fn = get_b8, help = `Enable debugging info`},
 		{name = "times", var = &opts.times, help = `Number of times to repeat`},
 		{name = "user", var = &opts.user, help = `Enable/disable user`},
 		{name = "priority", var = &opts.priority, help = `Priority level`},
