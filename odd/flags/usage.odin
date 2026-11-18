@@ -1,6 +1,5 @@
 package odd_flags
 
-import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:reflect"
@@ -45,7 +44,7 @@ usage :: proc(
 	compare: Sort_Option = sort_option_by_name,
 	file := os.stderr,
 ) {
-	if compare != nil {sort(opts, compare)}
+	if compare != nil { sort(opts, compare) }
 	width := terminal.terminal_width()
 
 	// Edge case, where tty is too small
@@ -76,14 +75,11 @@ usage :: proc(
 					csv = csv[:eq]
 				}
 				switch csv {
-				case "arg":
-					argtype = value
-				case "force":
-					force = true
-				case "hidden":
-					continue loop
+				case "arg": argtype = value
+				case "force": force = true
+				case "hidden": continue loop
 				}
-				if is_end {break}
+				if is_end { break }
 				pos = pos[comma + 1:]
 			}
 		}
@@ -139,32 +135,30 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 	}
 	has_overwrite := len(overwrite) > 0
 	switch i in ti.variant {
-	case Type_Info_Named:
-		print_var(i.base, overwrite, file)
+	case Type_Info_Named: print_var(i.base, overwrite, file)
 	case Type_Info_Integer:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		if i.signed {
 			print(file, "integer")
 		} else {
 			print(file, "natural")
 		}
 	case Type_Info_Rune:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		print(file, "character")
 	case Type_Info_Float:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		print(file, "decimal")
 	case Type_Info_Complex:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		print(file, "complex")
 	case Type_Info_Quaternion:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		print(file, "quaternion")
 	case Type_Info_String:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		print(file, "text")
-	case Type_Info_Boolean:
-		print(file, "bool")
+	case Type_Info_Boolean: print(file, "bool")
 	case Type_Info_Array:
 		print_var(i.elem, overwrite, file)
 		print(file, ".. +")
@@ -197,14 +191,13 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 		print(file, ']')
 		print(file, "..")
 		fmt.fprintf(file, " +%d", i.count - 1)
-	case Type_Info_Enum:
-		if has_overwrite {
-			print(file, overwrite)
-		} else {
-			print(file, '(')
-			print_enum(i)
-			print(file, ')')
-		}
+	case Type_Info_Enum: if has_overwrite {
+				print(file, overwrite)
+			} else {
+				print(file, '(')
+				print_enum(i)
+				print(file, ')')
+			}
 	case Type_Info_Struct:
 		if has_overwrite {
 			print(file, overwrite)
@@ -225,31 +218,23 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 	case Type_Info_Bit_Set:
 		backing_size: int
 		#partial switch bit in i.underlying.variant {
-		case Type_Info_Integer, Type_Info_Rune:
-			backing_size = i.underlying.size
+		case Type_Info_Integer, Type_Info_Rune: backing_size = i.underlying.size
 		case Type_Info_Named:
 			_ = bit.base.variant.(Type_Info_Enum)
 			backing_size = bit.base.size
-		case Type_Info_Enum:
-			backing_size = bit.base.size
-		case Type_Info_Array:
-			backing_size = bit.count * bit.elem_size
-		case:
-			please_use_help_attr(ti.id)
+		case Type_Info_Enum: backing_size = bit.base.size
+		case Type_Info_Array: backing_size = bit.count * bit.elem_size
+		case: please_use_help_attr(ti.id)
 		}
 		print(file, '[')
 		if has_overwrite {
 			print(file, overwrite)
 		} else {
 			#partial switch bit in i.elem.variant {
-			case Type_Info_Rune:
-				fmt.fprintf(file, "%c..=%c", i.lower, i.upper)
-			case Type_Info_Integer:
-				fmt.fprintf(file, "%d..=%d", i.lower, i.upper)
-			case Type_Info_Enum:
-				print_enum(bit)
-			case:
-				please_use_help_attr(ti.id)
+			case Type_Info_Rune: fmt.fprintf(file, "%c..=%c", i.lower, i.upper)
+			case Type_Info_Integer: fmt.fprintf(file, "%d..=%d", i.lower, i.upper)
+			case Type_Info_Enum: print_enum(bit)
+			case: please_use_help_attr(ti.id)
 			}
 		}
 		print(file, ']')
@@ -267,7 +252,7 @@ print_var :: proc(ti: ^Type_Info, overwrite: string, file := os.stderr) {
 	     Type_Info_Multi_Pointer,
 	     Type_Info_Soa_Pointer,
 	     Type_Info_Any:
-		if has_overwrite {print(file, overwrite); return}
+		if has_overwrite { print(file, overwrite); return }
 		please_use_help_attr(ti.id)
 	}
 }

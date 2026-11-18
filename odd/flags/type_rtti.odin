@@ -12,46 +12,34 @@ get_rtti :: proc(ptr: rawptr, id: typeid) -> bool {
 
 _get_rtti :: proc(ptr: rawptr, ti: ^Type_Info) -> bool {
 	switch i in ti.variant {
-	case Type_Info_Named:
-		return _get_rtti(ptr, i.base)
-	case Type_Info_Integer:
-		return get_rtti_integer(ti.id)(ptr, ti.id)
-	case Type_Info_Rune:
-		return get_rune(ptr, ti.id)
-	case Type_Info_Float:
-		return get_rtti_float(ti.id)(ptr, ti.id)
-	case Type_Info_Complex:
-		return get_rtti_complex(ptr, ti.id)
-	case Type_Info_Quaternion:
-		return get_rtti_quaternion(ptr, ti.id)
-	case Type_Info_String:
-		return get_rtti_string(ptr, ti.id)
-	case Type_Info_Boolean:
-		return get_rtti_bool(ti.id)(ptr, ti.id)
+	case Type_Info_Named: return _get_rtti(ptr, i.base)
+	case Type_Info_Integer: return get_rtti_integer(ti.id)(ptr, ti.id)
+	case Type_Info_Rune: return get_rune(ptr, ti.id)
+	case Type_Info_Float: return get_rtti_float(ti.id)(ptr, ti.id)
+	case Type_Info_Complex: return get_rtti_complex(ptr, ti.id)
+	case Type_Info_Quaternion: return get_rtti_quaternion(ptr, ti.id)
+	case Type_Info_String: return get_rtti_string(ptr, ti.id)
+	case Type_Info_Boolean: return get_rtti_bool(ti.id)(ptr, ti.id)
 	case Type_Info_Array,
-	     Type_Info_Dynamic_Array,
-	     Type_Info_Fixed_Capacity_Dynamic_Array,
-	     Type_Info_Enumerated_Array:
+		 Type_Info_Dynamic_Array,
+		 Type_Info_Fixed_Capacity_Dynamic_Array,
+		 Type_Info_Enumerated_Array:
 		return get_rtti_array(ptr, ti.id)
-	case Type_Info_Enum:
-		return get_rtti_enum(ptr, ti.id)
-	case Type_Info_Struct:
-		return get_rtti_struct(ptr, ti.id)
-	case Type_Info_Simd_Vector:
-		return get_rtti_simd_vector(ptr, ti.id)
-	case Type_Info_Bit_Set:
-		return get_rtti_bit_set(ptr, ti.id)
+	case Type_Info_Enum: return get_rtti_enum(ptr, ti.id)
+	case Type_Info_Struct: return get_rtti_struct(ptr, ti.id)
+	case Type_Info_Simd_Vector: return get_rtti_simd_vector(ptr, ti.id)
+	case Type_Info_Bit_Set: return get_rtti_bit_set(ptr, ti.id)
 	case Type_Info_Bit_Field,
-	     Type_Info_Type_Id,
-	     Type_Info_Matrix,
-	     Type_Info_Map,
-	     Type_Info_Union,
-	     Type_Info_Slice,
-	     Type_Info_Parameters,
-	     Type_Info_Procedure,
-	     Type_Info_Pointer,
-	     Type_Info_Multi_Pointer,
-	     Type_Info_Soa_Pointer:
+		 Type_Info_Type_Id,
+		 Type_Info_Matrix,
+		 Type_Info_Map,
+		 Type_Info_Union,
+		 Type_Info_Slice,
+		 Type_Info_Parameters,
+		 Type_Info_Procedure,
+		 Type_Info_Pointer,
+		 Type_Info_Multi_Pointer,
+		 Type_Info_Soa_Pointer:
 		please_use_custom_proc(ti.id)
 	case Type_Info_Any:
 		unimplemented("as far as I know, 'any' should never be passed as a pointer.")
@@ -62,12 +50,12 @@ _get_rtti :: proc(ptr: rawptr, ti: ^Type_Info) -> bool {
 get_rtti_enum :: proc(ptr: rawptr, id: typeid) -> bool {
 	value, ok := get_value()
 	if ok {
-		i, ok := reflect.enum_from_name_any(id, value)
-		if ok {
+		i, valid_enum := reflect.enum_from_name_any(id, value)
+		if valid_enum {
 			// Note: taking odin/flags as a reference, there they write by type
 			// but I honestly don't see that much big of a deal than to just do
 			// this, since: Type_Info_Enum_Value :: distinct i64
-			if ptr != nil {(cast(^i64)ptr)^ = cast(i64)i}
+			if ptr != nil { (cast(^i64)ptr)^ = cast(i64)i }
 			return true
 		} else {
 			base := type_base(id).variant.(Type_Info_Enum)
@@ -164,17 +152,12 @@ get_rtti_simd_vector :: proc(ptr: rawptr, id: typeid) -> bool {
 	missing_args(ti.count, args_count) or_return
 
 	#partial switch i in ti.elem.variant {
-	case Type_Info_Integer:
-		fn = get_rtti_integer(ti.elem.id)
-	case Type_Info_Float:
-		fn = get_rtti_float(ti.elem.id)
-	case Type_Info_Boolean:
-		fn = get_rtti_bool(ti.elem.id)
-	case Type_Info_Rune:
-		fn = get_rune
-	case:
-		// rawptr
-		please_use_custom_proc(id)
+	case Type_Info_Integer: fn = get_rtti_integer(ti.elem.id)
+	case Type_Info_Float: fn = get_rtti_float(ti.elem.id)
+	case Type_Info_Boolean: fn = get_rtti_bool(ti.elem.id)
+	case Type_Info_Rune: fn = get_rune
+	case: // rawptr
+			please_use_custom_proc(id)
 	}
 
 	if ptr != nil {
@@ -249,10 +232,8 @@ _enumerated_array_offset :: proc(idx: int, array: ^_Array) -> (i: int, ok: bool)
 		// assert
 		_ = ti.base.variant.(Type_Info_Enum)
 		get_rtti_enum(&i, ti.base.id) or_return
-	case Type_Info_Enum:
-		get_rtti_enum(&i, array.index.id) or_return
-	case:
-		unreachable()
+	case Type_Info_Enum: get_rtti_enum(&i, array.index.id) or_return
+	case: unreachable()
 	}
 
 	optval = value[eq + 1:]
@@ -291,8 +272,7 @@ get_array :: proc(
 			get_element(&values[offset], T) or_return
 		}
 	} else {
-		for i in 0 ..< count {
-			offset := get_offset(i, array) or_return
+		for _ in 0 ..< count {
 			get_element(nil, T) or_return
 		}
 	}
@@ -354,8 +334,7 @@ get_rtti_array :: proc(ptr: rawptr, id: typeid) -> bool {
 		too_many_args(v.count, args_count) or_return
 		data := mem.byte_slice(ptr, v.count * v.elem_size) if ptr != nil else nil
 		array = {_enumerated_array_offset, data, v.elem, v.index, v.count, v.elem_size}
-	case:
-		unreachable()
+	case: unreachable()
 	}
 
 	c32 :: complex32

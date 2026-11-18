@@ -58,14 +58,18 @@ main :: proc() {
 		{name = "user", var = &opts.user, help = `Enable/disable user`},
 		{name = "priority", var = &opts.priority, help = `Priority level`},
 		{name = "ok_level", var = &opts.ok_level, help = `How ok are you?`},
-		{name = "io", var = &opts.io, help = `#arg=FILE
-        Source file and destination`},
+		{
+			name = "io",
+			var  = &opts.io,
+			help = `#arg=FILE
+        Source file and destination`,
+		},
 		{name = "vaargs", var = &opts.vaargs, help = "Many files"},
 		{name = "files", var = &opts.files, help = `Parse files`},
 		{name = "ok_level_string", var = &opts.ok_level_string, help = `Explain how ok are you`},
 	}
 
-    cmd := []Option{{"run", "Run a command", &cmds.run, nil}}
+	cmd := []Option{{"run", "Run a command", &cmds.run, nil}}
 
 	// Initialize the map
 	m, ok := init(opt)
@@ -81,8 +85,7 @@ main :: proc() {
 	for has_args_left() {
 		err := parse(m, opt)
 		switch err {
-		case .Ok:
-			continue
+		case .Ok: continue
 		case .Dash_Dash:
 		// You can opt-in to stop parsing and collect the rest of the arguments:
 		// rest := get_args()[optind:]
@@ -90,18 +93,16 @@ main :: proc() {
 			// Print the help your way, and/or use the convenient usage()
 			usage(opt)
 			return
-		case .Not_Opt:
-            // Positional arguments
-            // Here is an example of how to use the same odd/flags
-            // infrastructure to parse commands
-			for c, i in cmd {
-				if c.name == optopt {
-					call(cmd, cast(u32)i + 1, false)
+		case .Not_Opt: // Positional arguments
+				// Here is an example of how to use the same odd/flags
+				// infrastructure to parse commands
+				for c, i in cmd {
+					if c.name == optopt {
+						call(cmd, cast(u32)i + 1, false)
+					}
 				}
-			}
 		// positional arguments
-		case .Error:
-			has_err = true
+		case .Error: has_err = true
 		}
 	}
 	if has_err do return
