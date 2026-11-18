@@ -1,226 +1,206 @@
 package odd_thread_easy
 
+// import "core:fmt"
+// import "core:time"
+
 import "base:intrinsics"
 import rt "base:runtime"
+import "core:mem"
 import "core:sync"
 import "core:thread"
-import "shared:odd/mem"
-import odd_thread "shared:odd/thread"
+import "shared:odd/debug"
+import othread "shared:odd/thread"
 
 /*
 This implements mostly of what the user would have to implement, both
 as convenience, and as an example.
 */
 
-Task_Proc :: proc(t: ^Task)
+Command_Proc :: proc(args: []rawptr)
 
-Task :: struct {
-	data:      []rawptr,
-	procedure: Task_Proc,
-	done:      int,
+Command :: struct {
+	data:      []rawptr,     // 16
+	procedure: Command_Proc, // 8
+	done:      i32,          // 4
+	counter:   i32,          // 4
 }
 
-/*
-Creates and initializes the pool.
-*/
-@(require_results)
+@(private)
+Pool :: othread.Pool
+
+@(thread_local)
+cursor: int
+
 init :: proc(
-	args: [thread.MAX_USER_ARGUMENTS]rawptr = nil,
-	thread_count: int = -1,
+	thread_count := -1,
 	priority: thread.Thread_Priority = .Normal,
-	context_name: string = "thread",
-	runner: thread.Thread_Proc = runner,
+	context_name := "thread",
 	pass_context := true,
+	reserve: uint = mem.Gigabyte when size_of(uintptr) == 8 else 128 * mem.Megabyte,
+	allocator := context.allocator,
 ) -> (
-	pool: ^odd_thread.Pool,
+	pool: ^Pool,
 	err: rt.Allocator_Error,
 ) {
-	thread_count := odd_thread.select_thread_count(thread_count)
+	context.allocator = allocator
 
-	pool = odd_thread.create_pool(thread_count) or_return
-	defer if err != nil {
-		free(pool)
-	}
+	b := new(sync.Barrier) or_return
+	defer if err != nil do free(b)
 
-	ok := #force_inline odd_thread.init(
+	count := othread.select_thread_count(thread_count)
+
+	sync.barrier_init(b, count)
+
+	pool = othread.create_pool(count, reserve) or_return
+
+	if !othread.init(
 		&pool.threads,
 		pool,
 		runner,
-		args,
-		priority,
-		context_name,
-		pass_context,
-	)
-	if !ok {
-		err = .Out_Of_Memory
-	}
-
+		config = {{b, nil, nil, nil, nil, nil, nil, nil}, context_name, priority, pass_context},
+	) { return }
 	return
 }
 
 /*
 Thread runner.
-
-If the user has a custom assertion_failure_proc, don't forget to call broadcast_error(),
-then park()
 */
 runner :: proc(t: ^thread.Thread) {
-	odd_thread.register_thread_backtrace()
-
-	Pool :: odd_thread.Pool
-
-	pool := (cast(^Pool)t.data)
-
-	odd_thread.context_pool = pool
-	odd_thread.context_thread_count = len(pool.threads)
-	odd_thread.current_thread_id = t.user_index
-
-	if context.assertion_failure_proc == rt.default_assertion_failure_proc {
-		context.assertion_failure_proc = odd_thread.default_assertion_failure_proc
+	// start, end: time.Time
+	// start = time.now()
+	when ODIN_DEBUG {
+		debug.register_backtrace()
 	}
 
-	buffer: [1 << 8]rawptr // 2048 bytes
+	pool := cast(^Pool)t.data
+	barrier := cast(^sync.Barrier)t.user_args[0]
 
-	tasks: []rawptr
-	task_index: int
+	othread.context_thread_id = t.user_index
+	othread.context_pool = pool
+	othread.context_thread_count = len(pool.threads)
 
-	should_reset: bool
-
-	// TBD: maybe make the Task an union? Points to think about:
-	// - If the thread user_index is not relevant, let threads steal
-	// tasks from other threads
-	// - Optionally let the user procedure increment the done counter
-	// as it becomes a free cleanup marker
-	run :: proc(pool: ^Pool, task: ^Task) {
-		task.procedure(task)
-
-		done := intrinsics.atomic_add_explicit(&task.done, 1, .Relaxed) + 1
-		// Only last thread is allowed to decrease the counter
-		if done == odd_thread.context_thread_count {
-			intrinsics.atomic_sub_explicit(&pool.tasks_pending, 1, .Relaxed)
-			// Signal task done
-			intrinsics.atomic_store_explicit(&task.done, -1, .Relaxed)
-		}
-	}
+	last_gen: sync.Futex
 
 	die: for {
-		for {
-			// Wait until all threads are done, or a thread failed
-			if pool.should_die ||
-			   pool.should_end && intrinsics.atomic_load(&pool.tasks_pending) == 0 {
-				break die
+		last_gen = othread.sema_wait(&pool.sema, last_gen)
+
+		pool_len := intrinsics.atomic_load_explicit(&pool.len, .Acquire)
+
+		commands_left := pool_len - cursor
+
+		for _ in 0 ..< commands_left {
+			idx := othread.get_queue(pool, cursor)
+			command := cast(^Command)pool.queue[idx]
+
+			cursor += 1
+
+			if command == nil do break die
+
+			context.user_ptr = command
+
+			for i in othread.next(&command.counter, cast(i32)len(pool.threads)) {
+				context.user_index = int(i)
+				command.procedure(command.data)
 			}
 
-			// Only runs on reset(), ideally after all threads finished the work
-			// This may break, depending on how the threads are used
-			if should_reset != pool.should_reset {
-				should_reset = !should_reset
-				task_index = 0
-				free_all(context.temp_allocator)
+			last_out := intrinsics.atomic_sub_explicit(&command.done, 1, .Acq_Rel) - 1 == 0
+			if last_out {
+				intrinsics.atomic_sub_explicit(&pool.commands_pending, 1, .Release)
 			}
-
-			tasks_left :=
-				intrinsics.atomic_load_explicit(&pool.tasks_assigned, .Relaxed) - task_index
-
-			if tasks_left == 1 {
-				// Skip slice copying, and slice iteration
-				// Lock against queue reallocation
-				sync.mutex_lock(&pool.queue_mutex)
-				task := pool.queue[task_index]
-				sync.mutex_unlock(&pool.queue_mutex)
-				task_index += 1
-				run(pool, cast(^Task)task)
-				continue
-			} else if tasks_left > 1 {
-				count := min(len(buffer), tasks_left)
-				// Lock against queue reallocation
-				sync.mutex_lock(&pool.queue_mutex)
-				copy_slice(buffer[:count], pool.queue[task_index:task_index + count])
-				sync.mutex_unlock(&pool.queue_mutex)
-				tasks = buffer[:count]
-				task_index += count
-				break
-			}
-
-			current := intrinsics.atomic_load_explicit(&pool.sema, .Acquire)
-			odd_thread.sema_wait(&pool.sema, current)
-		}
-
-		for i in 0 ..< len(tasks) {
-			if pool.should_die do break die
-			run(pool, cast(^Task)tasks[i])
 		}
 	}
+	sync.barrier_wait(barrier)
+	// end = time.now()
+	// fmt.println("Thread", t.user_index, "took:", time.diff(start, end))
 }
 
 /*
-Adds a new task to the queue.
+Adds a new command to the queue.
 
-Only at the main thread. You may free the Task using destroy_task, if
+Only at the main thread. You may free the Command using destroy_command, if
 you prefer to don't use the temp_allocator.
 
 Can be called from any thread.
 */
-add_task :: proc(
-	pool: ^odd_thread.Pool,
-	procedure: Task_Proc,
+add_command :: proc(
+	pool: ^Pool,
+	procedure: Command_Proc,
 	data: ..rawptr,
 	allocator := context.temp_allocator,
 ) -> (
-	task: ^Task,
+	command: ^Command,
 	err: rt.Allocator_Error,
 ) #optional_allocator_error {
-	if pool == nil do return
-
 	context.allocator = allocator
 
-	task = cast(^Task)mem.malloc(size_of(Task) + size_of(rawptr) * len(data)) or_return
-	args := mem.shift(task, rawptr, len(data))
+	command = new(Command) or_return
+	defer if err != nil do free(command)
+	args := make([]rawptr, len(data)) or_return
+	defer if err != nil do delete(args)
 
-	for d, i in data do args[i] = d
+	copy_slice(args[:], data[:])
 
-	task.procedure = procedure
-	task.data = args
+	command.procedure = procedure
+	command.data = args
+	intrinsics.atomic_store_explicit(&command.done, i32(len(pool.threads)), .Relaxed) // to surpress warning
 
-	intrinsics.atomic_add_explicit(&pool.tasks_pending, 1, .Relaxed)
-
-	{
-		context.allocator = pool.threads[0].creation_allocator
-		sync.guard(&pool.queue_mutex)
-		_, err = append(&pool.queue, task)
-	}
-
-	if err != nil {
-		free(task)
-		return nil, err
-	}
-
-	intrinsics.atomic_add_explicit(&pool.tasks_assigned, 1, .Relaxed)
-	odd_thread.sema_post(&pool.sema)
+	othread.submit(pool, command)
 
 	return
 }
 
 /*
-Destroys the task created by add_task.
+Clears the queue and temp_allocator from all threads.
 
-If tasks are created in threads in recursion, use a temp_allocator, instead.
-Threads that create a task also should run that task, which makes
-"defer destroy_task" not an option.
+Only call in main, or a thread from a diferent pool
 */
-destroy_task :: proc(task: ^Task, allocator := context.temp_allocator) {
-	if task == nil do return
-	free(task, allocator)
+reset :: proc(pool: ^Pool) {
+	barrier: sync.Barrier
+	sync.barrier_init(&barrier, len(pool.threads) + 1)
+	command := add_command(pool, _reset, &barrier)
+	sync.barrier_wait(&barrier)
+	intrinsics.atomic_store_explicit(&pool.len, 0, .Relaxed)
+	sync.barrier_wait(&barrier)
+	wait_command(command)
 }
 
-wait_task :: proc(pool: ^odd_thread.Pool, tasks: ..^Task) {
-	for task in tasks {
-		for {
-			intrinsics.cpu_relax()
-			thread.yield()
-			if task.done == -1 {
-				break
-			}
-		}
+_reset :: proc(args: []rawptr) {
+	barrier := cast(^sync.Barrier)args[0]
+	sync.barrier_wait(barrier)
+	free_all(context.temp_allocator)
+	cursor = 0
+	sync.barrier_wait(barrier)
+}
+
+/*
+Destroys the command created by add_command.
+
+If commands are created in threads in recursion, use a temp_allocator, instead.
+Threads that create a command also should run that command, which makes
+"defer destroy_command" not an option.
+*/
+destroy_command :: proc(command: ^Command, allocator := context.temp_allocator) {
+	if command == nil do return
+	free(command, allocator)
+}
+
+/*
+Waits until a command is completed
+*/
+wait_command :: proc {
+	wait_command_single,
+	wait_command_multiple,
+}
+
+wait_command_single :: proc "contextless" (command: ^Command) {
+	for {
+		if intrinsics.atomic_load_explicit(&command.done, .Acquire) == 0 do break
+		intrinsics.cpu_relax()
+	}
+}
+
+wait_command_multiple :: proc "contextless" (commands: ..^Command) {
+	for command in commands {
+		#force_inline wait_command_single(command)
 	}
 }
