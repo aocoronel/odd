@@ -248,5 +248,8 @@ What the user sees, if they misuse the flags?
 [ERROR] --- ok_level_string: invalid enum name: "Dog". Valid names: [Ok, Maybe_Ok, Not_Ok]
 [ERROR] --- times: received an invalid integer: "true". Valid values:
   -1, 1_000, 0xFF, 0b1010, 0o12, 0d10, 0z10
+[ERROR] --- debug: received an invalid bool: "inverts_the_bool_anyway". Valid values:
+  1, t, T, true, TRUE, True
+  0, f, F, false, FALSE, False
 [ERROR] --- priority: argument "a" is out of bounds: [A..=Z]
 #+END_SRC

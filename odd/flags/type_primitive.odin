@@ -17,38 +17,23 @@ type_base :: proc(id: typeid) -> ^runtime.Type_Info {
 }
 
 get_bool :: proc(ptr: rawptr, id: typeid) -> bool {
-	assert_type(id, bool)
-	ptr := cast(^bool)ptr; value, ok := parse_boolean()
-	if ptr != nil { ptr^ = value if ok else !ptr^ }
-	return true
+	assert_type(id, bool); return parse_boolean(ptr, bool)
 }
 
 get_b8 :: proc(ptr: rawptr, id: typeid) -> bool {
-	assert_type(id, b8)
-	ptr := cast(^b8)ptr; value, ok := parse_boolean()
-	if ptr != nil { ptr^ = b8(value) if ok else !ptr^ }
-	return true
+	assert_type(id, b8); return parse_boolean(ptr, b8)
 }
 
 get_b16 :: proc(ptr: rawptr, id: typeid) -> bool {
-	assert_type(id, b16)
-	ptr := cast(^b16)ptr; value, ok := parse_boolean()
-	if ptr != nil { ptr^ = b16(value) if ok else !ptr^ }
-	return true
+	assert_type(id, b16); return parse_boolean(ptr, b16)
 }
 
 get_b32 :: proc(ptr: rawptr, id: typeid) -> bool {
-	assert_type(id, b32)
-	ptr := cast(^b32)ptr; value, ok := parse_boolean()
-	if ptr != nil { ptr^ = b32(value) if ok else !ptr^ }
-	return true
+	assert_type(id, b32); return parse_boolean(ptr, b32)
 }
 
 get_b64 :: proc(ptr: rawptr, id: typeid) -> bool {
-	assert_type(id, b64)
-	ptr := cast(^b64)ptr; value, ok := parse_boolean()
-	if ptr != nil { ptr^ = b64(value) if ok else !ptr^ }
-	return true
+	assert_type(id, b64); return parse_boolean(ptr, b64)
 }
 
 get_int :: proc(ptr: rawptr, id: typeid) -> bool {

@@ -69,34 +69,19 @@ parse_uint :: proc() -> (value: uint, ok: bool) {
 	return
 }
 
-when STRICT {
-	parse_boolean :: proc() -> (value: bool, ok: bool) {
-		input, has_value := get_value()
-		if has_value {
-			value, ok = strconv.parse_bool(input)
-			if !ok {
-				invalid_value("bool", input, VALID_BOOL)
-			}
+parse_boolean :: #force_inline proc(ptr: rawptr, $T: typeid) -> bool {
+	if input, has_value := get_value(); has_value {
+		value, ok := strconv.parse_bool(input)
+		if !ok {
+			invalid_value("bool", input, VALID_BOOL)
+			return false
 		}
-		return
+		if ptr != nil { (cast(^T)ptr)^ = cast(T)value }
+	} else {
+		if ptr != nil { (cast(^T)ptr)^ = !(cast(^T)ptr)^ }
 	}
-} else {
-	parse_boolean :: proc() -> (value: bool, ok: bool) {
-		if len(optval) == 0 {
-			if is_next_option() do return
-			optarg = get_arg(optind)
-			arg := optarg
-			value, ok = strconv.parse_bool(arg)
-			if ok {
-				optind += 1
-			}
-			return
-		}
-		arg := optval
-		optarg = arg
-		optval = ""
-		return strconv.parse_bool(arg)
-	}
+
+	return true
 }
 
 parse_f32 :: proc() -> (value: f32, ok: bool) {
