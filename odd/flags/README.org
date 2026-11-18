@@ -72,6 +72,12 @@ The ~/~ prefix will not apply the values from the flag, but will normally parse 
 
 The library was made to parse flags, however it's possible to use all the machinery to parse commands using the same interface. See the example below. Also, the ~usage()~ procedure can be reused for commands.
 
+** Memory
+
+This library tries very hard to minimize heap usage. The only parts of it that uses heap is to initialize the ~map~ and to parse ~[dynamic]T~ types. Even for types like ~cstring~, which are often put in the heap, is just forwarded from ~runtime.args__~. In this case, as far as you don't overwrite this library ~args__~, you can rely on it, that it will be available until the end of the program.
+
+The map could be overkill, but I did experiment to use a regular array iteration, and even for a small set of flags like below, it was slower than the map. But honestly, the Odin map is rather efficient in memory, so just use a temporary allocator.
+
 ** Example
 
 Uses most of what the library can do.
