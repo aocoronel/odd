@@ -58,6 +58,20 @@ get_value :: proc "contextless" () -> (string, bool) {
 	return arg, true
 }
 
+get_value_no_shift :: proc "contextless" () -> (string, bool) {
+	arg: string
+	if len(optval) == 0 {
+		if is_next_option() do return "", false
+		optarg = get_arg(optind)
+		arg = optarg
+		return arg, true
+	}
+	arg = optval
+	optarg = arg
+	optval = ""
+	return arg, true
+}
+
 is_option :: #force_inline proc "contextless" (arg: string) -> bool {
 	if len(arg) == 0 do return true
 	return arg[0] == '-'

@@ -217,7 +217,7 @@ _array_offset :: proc(idx: int, _: ^_Array) -> (int, bool) {
 
 @(private)
 _enumerated_array_offset :: proc(idx: int, array: ^_Array) -> (i: int, ok: bool) {
-	value, _ := get_value()
+	value, _ := get_value_no_shift()
 
 	eq := strings.index_rune(value, '=')
 	if eq == -1 {
