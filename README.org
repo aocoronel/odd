@@ -6,6 +6,8 @@ A very odd collection from scratch in Odin, implementing odd ideas, or reinventi
 This project is the continuation of the unmaintained [[https://codeberg.org/aocoronel/aoclibs][aocoronel/aoclibs]], that did the same thing, but in the C programming language.
 #+END_QUOTE
 
+This project assumes you are using the latest release of Odin.
+
 ** Highlights
 
 - ~debug~: backtrace on relevant signals.
