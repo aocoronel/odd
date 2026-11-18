@@ -1,0 +1,9 @@
+* Terminal
+
+- Cross-platform terminal size
+- Consistent indented printing
+
+** History
+
+- ~terminal_size~ was created in Oct 11, 2026 in the commit ~c7e0b84~.
+- Odin added ~terminal_size~ to it's ~terminal~ collection in Nov 17, 2026 in the commit ~c218a03~. I'm not removing mine.
