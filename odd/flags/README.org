@@ -237,3 +237,16 @@ How would the user use this?
       -v \
       --vaargs a.txt b.txt c.txt d.txt e.txt
 #+END_SRC
+
+What the user sees, if they misuse the flags?
+
+#+BEGIN_SRC
+./example --io abc --files abc abc abc abc abc --ok_level:Dog --ok_level_string:Dog=hello --times:true --debug:inverts_the_bool_anyway --priority a
+[ERROR] --- io: 1 values are missing.
+[ERROR] --- files: too many arguments. Expected a maximum of 4, but exceeded 1.
+[ERROR] --- ok_level: invalid enum name: "Dog". Valid names: [Ok, Maybe_Ok, Not_Ok]
+[ERROR] --- ok_level_string: invalid enum name: "Dog". Valid names: [Ok, Maybe_Ok, Not_Ok]
+[ERROR] --- times: received an invalid integer: "true". Valid values:
+  -1, 1_000, 0xFF, 0b1010, 0o12, 0d10, 0z10
+[ERROR] --- priority: argument "a" is out of bounds: [A..=Z]
+#+END_SRC
