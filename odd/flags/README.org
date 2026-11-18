@@ -212,3 +212,20 @@ Generated usage message for this example. The description is written using ~term
   vaargs:[text]..
       Many files
 #+END_SRC
+
+How would the user use this?
+
+#+BEGIN_SRC bash
+  ./program \
+      --debug \
+      --files a.txt b.txt c.txt \
+      --io:a.txt b.txt \
+      --ok-level:Ok \
+      --ok-level-string Ok="I'm ok" Maybe_Ok="I'm maybe ok" Not_Ok="I'm not ok" \
+      --priority A B C D E \
+      --square 20 20 0 0 \
+      --times:2 \
+      --user "bob" true \
+      -v \
+      --vaargs a.txt b.txt c.txt d.txt e.txt
+#+END_SRC
